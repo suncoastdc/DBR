@@ -1,15 +1,17 @@
 #!/usr/bin/env node
-import { readFileSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
 import { request } from 'https';
 import { spawn } from 'child_process';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
 const REPO_SLUG = 'suncoastdc/DBR';
 const REMOTE_PACKAGE_URL = `https://raw.githubusercontent.com/${REPO_SLUG}/main/package.json`;
 const RELEASE_URL = `https://github.com/${REPO_SLUG}/releases/latest`;
 const FALLBACK_ZIP = `https://github.com/${REPO_SLUG}/archive/refs/heads/main.zip`;
 
-const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf-8'));
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)));
+const pkg = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf-8'));
 const currentVersion = pkg.version || '0.0.0';
 
 function compareVersions(a, b) {
@@ -65,7 +67,7 @@ function openUrl(url) {
 
 function launchApp() {
   console.log('\nLaunching app... (Ctrl+C to stop)\n');
-  const child = spawn('npm', ['run', 'electron:dev'], { stdio: 'inherit', shell: true });
+  const child = spawn('npm', ['run', 'electron:dev'], { stdio: 'inherit', shell: true, cwd: ROOT });
   child.on('exit', code => process.exit(code ?? 0));
 }
 
@@ -76,6 +78,18 @@ function prompt(question) {
     process.stdin.setEncoding('utf8');
     process.stdin.once('data', data => {
       resolve(data.trim());
+    });
+  });
+}
+
+function ensureDeps() {
+  if (existsSync(path.join(ROOT, 'node_modules'))) return Promise.resolve();
+  console.log('Installing dependencies (first run)...');
+  return new Promise((resolve, reject) => {
+    const child = spawn('npm', ['install'], { stdio: 'inherit', shell: true, cwd: ROOT });
+    child.on('exit', code => {
+      if (code === 0) resolve();
+      else reject(new Error(`npm install failed with code ${code}`));
     });
   });
 }
@@ -100,10 +114,11 @@ async function main() {
     console.log('You are up to date.');
   }
 
+  await ensureDeps();
   launchApp();
 }
 
 main().catch(err => {
   console.error('Launcher error:', err);
-  process.exit(1);
+  prompt('\nPress Enter to close...').then(() => process.exit(1));
 });
