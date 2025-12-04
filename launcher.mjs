@@ -85,8 +85,15 @@ function prompt(question) {
 }
 
 function ensureDeps() {
-  if (existsSync(path.join(ROOT, 'node_modules'))) return Promise.resolve();
-  console.log('Installing dependencies (first run)...');
+  const bins = ['concurrently', 'electron'];
+  const missingBin = bins.find(bin => {
+    const binPath = path.join(ROOT, 'node_modules', '.bin', bin + (process.platform === 'win32' ? '.cmd' : ''));
+    return !existsSync(binPath);
+  });
+
+  if (!missingBin && existsSync(path.join(ROOT, 'node_modules'))) return Promise.resolve();
+
+  console.log('Installing dependencies (this may take a minute)...');
   return new Promise((resolve, reject) => {
     const child = spawn('npm', ['install'], { stdio: 'inherit', shell: true, cwd: ROOT });
     child.on('exit', code => {
