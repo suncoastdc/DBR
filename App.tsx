@@ -3,11 +3,13 @@ import { AppView, DepositRecord, BankTransaction } from './types';
 import DepositProcessor from './components/DepositProcessor';
 import BankImport from './components/BankImport';
 import ReconciliationView from './components/ReconciliationView';
+import { checkForUpdate, UpdateCheckResult } from './services/updateService';
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<AppView>(AppView.RECONCILE);
   const [deposits, setDeposits] = useState<DepositRecord[]>([]);
   const [bankTransactions, setBankTransactions] = useState<BankTransaction[]>([]);
+  const [updateInfo, setUpdateInfo] = useState<UpdateCheckResult | null>(null);
 
   // Load from local storage on mount
   useEffect(() => {
@@ -15,6 +17,11 @@ const App: React.FC = () => {
     const savedTx = localStorage.getItem('dbr_transactions');
     if (savedDeposits) setDeposits(JSON.parse(savedDeposits));
     if (savedTx) setBankTransactions(JSON.parse(savedTx));
+  }, []);
+
+  // Check for app updates on load
+  useEffect(() => {
+    checkForUpdate().then(setUpdateInfo);
   }, []);
 
   // Save to local storage on change
@@ -90,6 +97,18 @@ const App: React.FC = () => {
               <i className="fas fa-university sm:mr-2"></i><span className="hidden sm:inline">Import Bank</span>
             </button>
           </nav>
+
+          {updateInfo?.updateAvailable && (
+            <a
+              href={updateInfo.downloadUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="ml-4 px-3 py-2 bg-yellow-400 text-blue-900 rounded-md text-xs font-semibold shadow hover:bg-yellow-300"
+              title={`Current: ${updateInfo.current} • Latest: ${updateInfo.latest}`}
+            >
+              Update available
+            </a>
+          )}
         </div>
       </header>
 
