@@ -66,9 +66,11 @@ function openUrl(url) {
 }
 
 function launchApp() {
-  console.log('\nLaunching app... (Ctrl+C to stop)\n');
-  const child = spawn('npm', ['run', 'electron:dev'], { stdio: 'inherit', shell: true, cwd: ROOT });
-  child.on('exit', code => process.exit(code ?? 0));
+  return new Promise(resolve => {
+    console.log('\nLaunching app... (Ctrl+C to stop)\n');
+    const child = spawn('npm', ['run', 'electron:dev'], { stdio: 'inherit', shell: true, cwd: ROOT });
+    child.on('exit', code => resolve(code ?? 0));
+  });
 }
 
 function prompt(question) {
@@ -115,7 +117,9 @@ async function main() {
   }
 
   await ensureDeps();
-  launchApp();
+  const exitCode = await launchApp();
+  await prompt('\nApp closed. Press Enter to exit launcher...');
+  process.exit(exitCode);
 }
 
 main().catch(err => {
