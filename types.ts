@@ -1,0 +1,45 @@
+export interface DepositBreakdown {
+  cash: number;
+  checks: number;
+  insuranceChecks: number;
+  creditCards: number; // Visa/MC/Amex/Discover combined usually, or separated
+  careCredit: number;
+  cherry: number;
+  eft: number;
+  other: number;
+}
+
+export interface DepositRecord {
+  id: string;
+  date: string; // YYYY-MM-DD
+  total: number;
+  breakdown: DepositBreakdown;
+  sourceImage?: string; // Base64 thumbnail for reference
+  status: 'verified' | 'pending';
+  notes?: string;
+}
+
+export interface BankTransaction {
+  id: string;
+  date: string; // YYYY-MM-DD
+  description: string;
+  amount: number; // Positive for deposit
+  category?: string;
+}
+
+export interface ReconciliationStatus {
+  date: string;
+  dentrixTotal: number;
+  bankTotal: number;
+  difference: number;
+  matches: boolean;
+  depositRecordIds: string[];
+  bankTransactionIds: string[];
+}
+
+export enum AppView {
+  DASHBOARD = 'DASHBOARD',
+  IMPORT_SLIPS = 'IMPORT_SLIPS',
+  IMPORT_BANK = 'IMPORT_BANK',
+  RECONCILE = 'RECONCILE'
+}
