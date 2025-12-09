@@ -1,4 +1,4 @@
-# Run and deploy your app
+# DBR Dentrix Bank Reconciler
 
 This contains everything you need to run your app locally.
 

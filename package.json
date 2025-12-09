@@ -1,12 +1,12 @@
 {
-  "name": "MyElectronApp",
-  "version": "1.0.3",
+  "name": "dbr-dentrix-bank-reconciler",
+  "version": "1.0.4",
   "main": "main.js",
   "author": "MyElectronApp Developer",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder",
-    "build:win": "electron-builder --win --x64",
+    "build": "npm run prebuild && electron-builder",
+    "build:win": "npm run prebuild && electron-builder --win --x64",
     "dev": "vite",
     "preview": "vite preview",
     "prebuild": "vite build",
@@ -31,8 +31,8 @@
     "wait-on": "^7.2.0"
   },
   "build": {
-    "appId": "com.myelectronapp.app",
-    "productName": "MyElectronApp",
+    "appId": "com.dbr.dentrix.bankreconciler",
+    "productName": "DBR Dentrix Bank Reconciler",
     "directories": {
       "output": "release"
     },
@@ -40,7 +40,8 @@
     "files": [
       "dist/**/*",
       "main.js",
-      "package.json"
+      "package.json",
+      "build/icon.ico"
     ],
     "win": {
       "target": "nsis"
