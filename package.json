@@ -1,6 +1,6 @@
 {
   "name": "dbr-dentrix-bank-reconciler",
-  "version": "1.0.11",
+  "version": "1.0.12",
   "main": "main.js",
   "author": "MyElectronApp Developer",
   "scripts": {

@@ -67,6 +67,11 @@ const App: React.FC = () => {
     }
   };
 
+  const datesWithSheets = new Set([
+    ...Array.from(importedDates),
+    ...deposits.map(d => d.date),
+  ]);
+
   const renderContent = () => {
     switch (currentView) {
       case AppView.DASHBOARD:
