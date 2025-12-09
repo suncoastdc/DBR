@@ -12,6 +12,7 @@ dist
 dist-ssr
 release
 *.local
+update-token.json
 
 # Editor directories and files
 .vscode/*

@@ -6,9 +6,9 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 const REPO_SLUG = 'suncoastdc/DBR';
-const REMOTE_PACKAGE_URL = `https://raw.githubusercontent.com/${REPO_SLUG}/main/package.json`;
+const DEFAULT_BRANCH = 'main';
+const REMOTE_PACKAGE_URL = `https://api.github.com/repos/${REPO_SLUG}/contents/package.json?ref=${DEFAULT_BRANCH}`;
 const RELEASE_URL = `https://github.com/${REPO_SLUG}/releases/latest`;
-const FALLBACK_ZIP = `https://github.com/${REPO_SLUG}/archive/refs/heads/main.zip`;
 const DEV_SERVER_URL = 'http://localhost:3000';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)));
@@ -38,11 +38,33 @@ function compareVersions(a, b) {
   return 0;
 }
 
-function fetchJson(url) {
+function getGithubToken() {
+  const envToken = process.env.GH_TOKEN || process.env.GITHUB_TOKEN;
+  if (envToken) return envToken;
+
+  const tokenPath = path.join(ROOT, 'build', 'update-token.json');
+  if (existsSync(tokenPath)) {
+    try {
+      const parsed = JSON.parse(readFileSync(tokenPath, 'utf8'));
+      if (parsed?.token) return parsed.token;
+    } catch (err) {
+      console.warn(`Failed to read GitHub token from ${tokenPath}:`, err);
+    }
+  }
+
+  return null;
+}
+
+function fetchJson(url, extraHeaders = {}) {
   return new Promise((resolve, reject) => {
+    const headers = {
+      'Cache-Control': 'no-cache',
+      'User-Agent': 'dbr-launcher',
+      ...extraHeaders,
+    };
     const req = request(
       url,
-      { headers: { 'Cache-Control': 'no-cache' }, timeout: 4000 },
+      { headers, timeout: 4000 },
       res => {
         if (res.statusCode && res.statusCode >= 400) {
           reject(new Error(`HTTP ${res.statusCode}`));
@@ -70,12 +92,21 @@ function fetchJson(url) {
 
 async function checkForUpdate() {
   try {
-    const remote = await fetchJson(REMOTE_PACKAGE_URL);
+    const token = getGithubToken();
+    const remote = await fetchJson(REMOTE_PACKAGE_URL, {
+      Accept: 'application/vnd.github.v3.raw',
+      ...(token ? { Authorization: `token ${token}` } : {}),
+    });
     const latest = remote.version || '0.0.0';
     const updateAvailable = compareVersions(latest, currentVersion) > 0;
     return { latest, updateAvailable };
   } catch (err) {
-    return { latest: null, updateAvailable: false, error: err?.message || 'Failed to check updates' };
+    const message = err?.message || 'Failed to check updates';
+    return {
+      latest: null,
+      updateAvailable: false,
+      error: /HTTP 404/.test(message) ? `${message} (repo may be private or token missing)` : message,
+    };
   }
 }
 
