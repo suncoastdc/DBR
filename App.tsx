@@ -8,6 +8,7 @@ import { checkForUpdate, UpdateCheckResult } from './services/updateService';
 import BulkPdfImport from './components/BulkPdfImport';
 
 const App: React.FC = () => {
+  const appVersion = import.meta.env.APP_VERSION || 'dev';
   const [currentView, setCurrentView] = useState<AppView>(AppView.RECONCILE);
   const [deposits, setDeposits] = useState<DepositRecord[]>([]);
   const [bankTransactions, setBankTransactions] = useState<BankTransaction[]>([]);
@@ -130,6 +131,7 @@ const App: React.FC = () => {
               <i className="fas fa-cog"></i>
               <span className="hidden sm:inline">Settings</span>
             </button>
+            <span className="text-[11px] text-blue-100 bg-blue-900/50 px-2 py-1 rounded">v{appVersion}</span>
           </div>
         </div>
       </header>
