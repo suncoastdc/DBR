@@ -96,7 +96,7 @@ const App: React.FC = () => {
               onClick={() => setCurrentView(AppView.IMPORT_SLIPS)}
               className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${currentView === AppView.IMPORT_SLIPS ? 'bg-blue-900 text-white' : 'text-blue-100 hover:bg-blue-700'}`}
             >
-              <i className="fas fa-file-medical sm:mr-2"></i><span className="hidden sm:inline">Add Slip</span>
+              <i className="fas fa-file-medical sm:mr-2"></i><span className="hidden sm:inline">Add Day Sheet</span>
             </button>
             <button 
               onClick={() => setCurrentView(AppView.IMPORT_BANK)}

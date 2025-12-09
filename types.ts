@@ -51,6 +51,7 @@ export interface ElectronAPI {
   captureScreen: () => Promise<string>;
   listPdfs: (folderPath: string) => Promise<{ name: string; path: string; mtimeMs: number }[]>;
   readPdfBase64: (filePath: string) => Promise<string>;
+  selectFolder: () => Promise<string | null>;
 }
 
 declare global {

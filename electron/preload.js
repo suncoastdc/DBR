@@ -1,6 +1,7 @@
 import { contextBridge, desktopCapturer, screen } from 'electron';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { ipcRenderer } from 'electron';
 
 const captureScreen = async () => {
   const primary = screen.getPrimaryDisplay();
@@ -43,5 +44,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   readPdfBase64: async (filePath) => {
     const data = await fs.readFile(filePath);
     return data.toString('base64');
+  },
+  selectFolder: async () => {
+    return ipcRenderer.invoke('select-folder');
   },
 });

@@ -138,6 +138,13 @@ const BulkPdfImport: React.FC<BulkPdfImportProps> = ({ onSave }) => {
     }
   };
 
+  const pickFolder = async () => {
+    const selected = await window.electronAPI?.selectFolder();
+    if (selected) {
+      setFolderPath(selected);
+    }
+  };
+
   const markImported = (entry: PdfEntry) => {
     const nextLog = {
       ...importLog,
@@ -188,7 +195,7 @@ const BulkPdfImport: React.FC<BulkPdfImportProps> = ({ onSave }) => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <div className="md:col-span-2">
+        <div className="md:col-span-2 flex gap-2">
           <label className="block text-sm font-medium text-gray-700">Folder path (UNC or local)</label>
           <input
             value={folderPath}
@@ -196,6 +203,13 @@ const BulkPdfImport: React.FC<BulkPdfImportProps> = ({ onSave }) => {
             placeholder="\\\\server\\share\\day-sheets"
             className="mt-1 w-full border rounded px-3 py-2"
           />
+          <button
+            onClick={pickFolder}
+            className="mt-1 px-3 py-2 text-sm bg-gray-200 hover:bg-gray-300 rounded"
+            type="button"
+          >
+            Browse
+          </button>
         </div>
         <div className="md:col-span-1 grid grid-cols-2 gap-2">
           <div>

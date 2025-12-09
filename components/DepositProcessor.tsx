@@ -352,9 +352,24 @@ const DepositProcessor: React.FC<DepositProcessorProps> = ({ onSave }) => {
 
   // Phase 1: Upload or Capture
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-96">
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-96">
       
-      {/* Upload Option */}
+      {/* Screen Capture Option (primary) */}
+      <button 
+        onClick={startCaptureSession}
+        className="flex flex-col items-center justify-center border-2 border-dashed border-blue-500 rounded-lg bg-blue-50 hover:bg-blue-100 transition-colors cursor-pointer h-full group text-left col-span-2"
+      >
+        <div className="text-center p-6">
+          <div className="mx-auto h-16 w-16 text-gray-50 mb-4 bg-blue-600 rounded-full flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
+             <i className="fas fa-desktop text-3xl text-white"></i>
+          </div>
+          <h3 className="mt-2 text-base font-semibold text-blue-900">Capture Day Sheet (Recommended)</h3>
+          <p className="mt-1 text-xs text-blue-900/80">Live preview & timer. Keeps PHI local before redaction.</p>
+          <p className="mt-2 text-xs text-blue-900 font-medium py-1 px-2 bg-white/70 rounded">Click to capture</p>
+        </div>
+      </button>
+
+      {/* Upload Option (fallback) */}
       <div className="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer relative h-full group">
         <input 
           type="file" 
@@ -371,22 +386,6 @@ const DepositProcessor: React.FC<DepositProcessorProps> = ({ onSave }) => {
           <p className="mt-2 text-xs text-blue-500 font-medium py-1 px-2 bg-blue-50 rounded">Or Press Ctrl+V to Paste</p>
         </div>
       </div>
-
-      {/* Screen Capture Option */}
-      <button 
-        onClick={startCaptureSession}
-        className="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-lg bg-gray-50 hover:bg-blue-50 transition-colors cursor-pointer h-full group text-left"
-      >
-        <div className="text-center p-6">
-          <div className="mx-auto h-16 w-16 text-gray-400 mb-4 bg-white rounded-full flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
-             <i className="fas fa-desktop text-3xl text-indigo-500"></i>
-          </div>
-          <h3 className="mt-2 text-sm font-medium text-gray-900">Capture Day Sheet</h3>
-          <p className="mt-1 text-xs text-gray-500">From Screen or Window</p>
-          <p className="mt-2 text-xs text-indigo-500 font-medium py-1 px-2 bg-indigo-50 rounded">Live Preview & Timer</p>
-        </div>
-      </button>
-
     </div>
   );
 };
