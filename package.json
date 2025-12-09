@@ -1,6 +1,6 @@
 {
   "name": "MyElectronApp",
-  "version": "1.0.0",
+  "version": "1.0.3",
   "main": "main.js",
   "author": "MyElectronApp Developer",
   "scripts": {
@@ -36,6 +36,7 @@
     "directories": {
       "output": "release"
     },
+    "icon": "build/icon.ico",
     "files": [
       "dist/**/*",
       "main.js",
