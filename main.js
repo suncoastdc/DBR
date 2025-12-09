@@ -1,9 +1,42 @@
+const fs = require('node:fs');
 const path = require('node:path');
 const { app, BrowserWindow } = require('electron');
 const { autoUpdater } = require('electron-updater');
 
 let mainWindow;
 const isDev = !app.isPackaged;
+
+function loadUpdaterToken() {
+  const envToken = process.env.GH_TOKEN || process.env.GITHUB_TOKEN;
+  if (envToken) {
+    return envToken;
+  }
+
+  const tokenFilePaths = [
+    path.join(process.resourcesPath, 'update-token.json'),
+    path.join(__dirname, 'build', 'update-token.json')
+  ];
+
+  for (const tokenPath of tokenFilePaths) {
+    if (fs.existsSync(tokenPath)) {
+      try {
+        const { token } = JSON.parse(fs.readFileSync(tokenPath, 'utf8'));
+        if (token) {
+          return token;
+        }
+      } catch (error) {
+        console.error(`Failed to read updater token from ${tokenPath}:`, error);
+      }
+    }
+  }
+
+  return null;
+}
+
+const updaterToken = loadUpdaterToken();
+if (updaterToken) {
+  autoUpdater.requestHeaders = { Authorization: `token ${updaterToken}` };
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({

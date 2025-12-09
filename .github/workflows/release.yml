@@ -8,6 +8,9 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+    env:
+      GH_TOKEN: ${{ secrets.GH_TOKEN }}
+      AUTO_UPDATE_TOKEN: ${{ secrets.AUTO_UPDATE_TOKEN }}
 
     steps:
       - name: Checkout
@@ -21,9 +24,15 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Write auto-update token
+        if: env.AUTO_UPDATE_TOKEN != ''
+        run: |
+          echo "::add-mask::$env:AUTO_UPDATE_TOKEN"
+          if (-not (Test-Path -Path "build")) { New-Item -ItemType Directory -Path "build" | Out-Null }
+          $json = "{`"token`":`"$env:AUTO_UPDATE_TOKEN`"}"
+          Set-Content -Path "build/update-token.json" -Value $json -Encoding UTF8
+
       - name: Build and publish
-        env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
           npm run prebuild
           npx electron-builder --win --x64 --publish always

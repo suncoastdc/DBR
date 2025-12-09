@@ -42,7 +42,8 @@
       "dist/**/*",
       "main.js",
       "package.json",
-      "build/icon.ico"
+      "build/icon.ico",
+      "build/update-token.json"
     ],
     "win": {
       "target": "nsis"
