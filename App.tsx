@@ -174,7 +174,3 @@ const App: React.FC = () => {
 };
 
 export default App;
-  const datesWithSheets = new Set([
-    ...Array.from(importedDates),
-    ...deposits.map(d => d.date),
-  ]);
