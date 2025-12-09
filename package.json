@@ -1,21 +1,23 @@
 {
-  "name": "dentrix-bank-reconciler",
-  "private": true,
+  "name": "MyElectronApp",
   "version": "1.0.0",
-  "type": "module",
-  "main": "electron/main.js",
+  "main": "main.js",
+  "author": "MyElectronApp Developer",
   "scripts": {
+    "start": "electron .",
+    "build": "electron-builder",
+    "build:win": "electron-builder --win --x64",
     "dev": "vite",
-    "build": "vite build",
     "preview": "vite preview",
-    "electron:dev": "concurrently -k \"npm run dev\" \"wait-on http://localhost:3000 && electron .\"",
-    "dist": "npm run build && electron-builder",
-    "dist:portable": "npm run build && electron-builder --win portable"
+    "prebuild": "vite build",
+    "prebuild:win": "npm run prebuild",
+    "electron:dev": "concurrently -k \"npm run dev\" \"wait-on http://localhost:5173 && electron .\""
   },
   "dependencies": {
     "@google/genai": "^1.31.0",
-    "react-dom": "^19.2.1",
-    "react": "^19.2.1"
+    "electron-updater": "^6.1.8",
+    "react": "^19.2.1",
+    "react-dom": "^19.2.1"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
@@ -29,17 +31,25 @@
     "wait-on": "^7.2.0"
   },
   "build": {
-    "appId": "com.dentrix.reconciler",
-    "productName": "Dentrix Bank Reconciler",
+    "appId": "com.myelectronapp.app",
+    "productName": "MyElectronApp",
     "directories": {
       "output": "release"
     },
     "files": [
       "dist/**/*",
-      "electron/**/*"
+      "main.js",
+      "package.json"
     ],
     "win": {
       "target": "nsis"
-    }
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "mygithubusername",
+        "repo": "myelectronapp"
+      }
+    ]
   }
 }
