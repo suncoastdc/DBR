@@ -1,6 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, Menu } = require('electron');
 const { autoUpdater } = require('electron-updater');
 
 let mainWindow;
@@ -47,6 +47,10 @@ function createWindow() {
       nodeIntegration: true
     }
   });
+
+  // Remove the default menu to keep the app chrome clean
+  Menu.setApplicationMenu(null);
+  mainWindow.removeMenu();
 
   if (isDev) {
     mainWindow.loadURL(process.env.ELECTRON_START_URL || 'http://localhost:5173');
