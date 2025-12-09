@@ -9,10 +9,21 @@ const REPO_SLUG = 'suncoastdc/DBR';
 const REMOTE_PACKAGE_URL = `https://raw.githubusercontent.com/${REPO_SLUG}/main/package.json`;
 const RELEASE_URL = `https://github.com/${REPO_SLUG}/releases/latest`;
 const FALLBACK_ZIP = `https://github.com/${REPO_SLUG}/archive/refs/heads/main.zip`;
+const DEV_SERVER_URL = 'http://localhost:3000';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)));
 const pkg = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf-8'));
 const currentVersion = pkg.version || '0.0.0';
+const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+const electronCmd = path.join(
+  ROOT,
+  'node_modules',
+  '.bin',
+  process.platform === 'win32' ? 'electron.cmd' : 'electron'
+);
+const useShell = process.platform === 'win32';
+
+let activeDevServer = null;
 
 function compareVersions(a, b) {
   const pa = a.split('.').map(n => parseInt(n, 10));
@@ -29,21 +40,28 @@ function compareVersions(a, b) {
 
 function fetchJson(url) {
   return new Promise((resolve, reject) => {
-    const req = request(url, { headers: { 'Cache-Control': 'no-cache' } }, res => {
-      if (res.statusCode && res.statusCode >= 400) {
-        reject(new Error(`HTTP ${res.statusCode}`));
-        return;
-      }
-      let body = '';
-      res.setEncoding('utf8');
-      res.on('data', chunk => (body += chunk));
-      res.on('end', () => {
-        try {
-          resolve(JSON.parse(body));
-        } catch (err) {
-          reject(err);
+    const req = request(
+      url,
+      { headers: { 'Cache-Control': 'no-cache' }, timeout: 4000 },
+      res => {
+        if (res.statusCode && res.statusCode >= 400) {
+          reject(new Error(`HTTP ${res.statusCode}`));
+          return;
         }
-      });
+        let body = '';
+        res.setEncoding('utf8');
+        res.on('data', chunk => (body += chunk));
+        res.on('end', () => {
+          try {
+            resolve(JSON.parse(body));
+          } catch (err) {
+            reject(err);
+          }
+        });
+      }
+    );
+    req.on('timeout', () => {
+      req.destroy(new Error('Request timed out'));
     });
     req.on('error', reject);
     req.end();
@@ -65,22 +83,12 @@ function openUrl(url) {
   spawn('cmd', ['/c', 'start', '', url], { stdio: 'ignore', detached: true });
 }
 
-function launchApp() {
-  return new Promise(resolve => {
-    console.log('\nLaunching app... (Ctrl+C to stop)\n');
-    const child = spawn('npm', ['run', 'electron:dev'], { stdio: 'inherit', shell: true, cwd: ROOT });
-    child.on('exit', code => resolve(code ?? 0));
-  });
-}
-
 function prompt(question) {
   return new Promise(resolve => {
     process.stdout.write(question);
     process.stdin.resume();
     process.stdin.setEncoding('utf8');
-    process.stdin.once('data', data => {
-      resolve(data.trim());
-    });
+    process.stdin.once('data', data => resolve(data.trim()));
   });
 }
 
@@ -93,19 +101,120 @@ function ensureDeps() {
 
   if (!missingBin && existsSync(path.join(ROOT, 'node_modules'))) return Promise.resolve();
 
-  console.log('Installing dependencies (this may take a minute)...');
+  console.log('\nInstalling dependencies (this may take a minute)...');
   return new Promise((resolve, reject) => {
-    const child = spawn('npm', ['install'], { stdio: 'inherit', shell: true, cwd: ROOT });
+    const child = spawn(npmCmd, ['install'], { stdio: 'inherit', cwd: ROOT, shell: useShell });
     child.on('exit', code => {
       if (code === 0) resolve();
       else reject(new Error(`npm install failed with code ${code}`));
     });
+    child.on('error', reject);
   });
+}
+
+function pipeWithPrefix(stream, prefix, onData) {
+  stream.on('data', chunk => {
+    const lines = chunk.toString().split(/\r?\n/).filter(Boolean);
+    lines.forEach(line => {
+      console.log(`${prefix} ${line}`);
+      onData?.(line);
+    });
+  });
+}
+
+function startDevServer() {
+  return new Promise((resolve, reject) => {
+    const dev = spawn(
+      npmCmd,
+      ['run', 'dev', '--', '--host', '0.0.0.0', '--port', '3000', '--clearScreen', 'false'],
+      { cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe'], shell: useShell }
+    );
+
+    let ready = false;
+    const finish = (value, isError) => {
+      if (ready) return;
+      ready = true;
+      if (isError && dev.exitCode === null) dev.kill('SIGINT');
+      isError ? reject(value) : resolve(dev);
+    };
+
+    const checkReady = text => {
+      if (
+        text.includes('ready in') ||
+        text.includes('Local:   http://localhost:3000') ||
+        text.includes('Local:   http://127.0.0.1:3000')
+      ) {
+        finish(dev, false);
+      }
+    };
+
+    pipeWithPrefix(dev.stdout, '[dev]', checkReady);
+    pipeWithPrefix(dev.stderr, '[dev]', checkReady);
+
+    dev.on('error', err => finish(err, true));
+    dev.on('exit', code => {
+      if (!ready) finish(new Error(`Dev server exited early (code ${code ?? 'unknown'})`), true);
+    });
+
+    setTimeout(() => {
+      if (!ready) finish(new Error('Dev server did not become ready within 30s'), true);
+    }, 30000);
+  });
+}
+
+function stopProcess(child) {
+  return new Promise(resolve => {
+    if (!child || child.killed || child.exitCode !== null) return resolve();
+    const timeout = setTimeout(() => {
+      if (child.exitCode === null) child.kill('SIGTERM');
+    }, 3000);
+    child.once('exit', () => {
+      clearTimeout(timeout);
+      resolve();
+    });
+    child.kill('SIGINT');
+  });
+}
+
+function startElectron() {
+  return new Promise((resolve, reject) => {
+    const electronExecutable = existsSync(electronCmd) ? electronCmd : 'electron';
+    console.log(`Using Electron executable: ${electronExecutable}`);
+    const child = spawn(
+      electronExecutable,
+      ['.'],
+      {
+        cwd: ROOT,
+        stdio: 'inherit',
+        env: { ...process.env, ELECTRON_START_URL: DEV_SERVER_URL },
+        shell: useShell,
+      }
+    );
+    child.on('exit', code => resolve(code ?? 0));
+    child.on('error', reject);
+  });
+}
+
+async function launchApp() {
+  console.log('\nStarting Vite dev server (this is the longest part)...');
+  activeDevServer = await startDevServer();
+  console.log('✓ Dev server ready at http://localhost:3000');
+
+  console.log('Starting Electron shell...');
+  try {
+    return await startElectron();
+  } finally {
+    console.log('Closing dev server...');
+    await stopProcess(activeDevServer);
+    activeDevServer = null;
+  }
 }
 
 async function main() {
   console.log('Dentrix Bank Reconciler Launcher');
   console.log(`Current version: ${currentVersion}`);
+
+  console.log('\nChecking for updates...');
   const result = await checkForUpdate();
 
   if (result.error) {
@@ -124,12 +233,25 @@ async function main() {
   }
 
   await ensureDeps();
-  const exitCode = await launchApp();
-  await prompt('\nApp closed. Press Enter to exit launcher...');
-  process.exit(exitCode);
+
+  try {
+    const exitCode = await launchApp();
+    await prompt('\nApp closed. Press Enter to exit launcher...');
+    process.exit(exitCode);
+  } catch (err) {
+    console.error(`\nLaunch failed: ${err.message}`);
+    await prompt('\nPress Enter to close...');
+    process.exit(1);
+  }
 }
 
-main().catch(err => {
+process.on('SIGINT', async () => {
+  if (activeDevServer) await stopProcess(activeDevServer);
+  process.exit(0);
+});
+
+main().catch(async err => {
   console.error('Launcher error:', err);
-  prompt('\nPress Enter to close...').then(() => process.exit(1));
+  await prompt('\nPress Enter to close...');
+  process.exit(1);
 });

@@ -43,3 +43,15 @@ export enum AppView {
   IMPORT_BANK = 'IMPORT_BANK',
   RECONCILE = 'RECONCILE'
 }
+
+export type ModelProvider = 'gemini' | 'openai';
+
+export interface ElectronAPI {
+  captureScreen: () => Promise<string>;
+}
+
+declare global {
+  interface Window {
+    electronAPI?: ElectronAPI;
+  }
+}

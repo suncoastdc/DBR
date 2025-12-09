@@ -3,6 +3,7 @@ import { AppView, DepositRecord, BankTransaction } from './types';
 import DepositProcessor from './components/DepositProcessor';
 import BankImport from './components/BankImport';
 import ReconciliationView from './components/ReconciliationView';
+import SettingsModal from './components/SettingsModal';
 import { checkForUpdate, UpdateCheckResult } from './services/updateService';
 
 const App: React.FC = () => {
@@ -10,6 +11,7 @@ const App: React.FC = () => {
   const [deposits, setDeposits] = useState<DepositRecord[]>([]);
   const [bankTransactions, setBankTransactions] = useState<BankTransaction[]>([]);
   const [updateInfo, setUpdateInfo] = useState<UpdateCheckResult | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   // Load from local storage on mount
   useEffect(() => {
@@ -47,13 +49,13 @@ const App: React.FC = () => {
   };
 
   const handleResetData = () => {
-      if(window.confirm("Are you sure you want to clear all stored data? This cannot be undone.")) {
-          setDeposits([]);
-          setBankTransactions([]);
-          localStorage.removeItem('dbr_deposits');
-          localStorage.removeItem('dbr_transactions');
-      }
-  }
+    if (window.confirm("Are you sure you want to clear all stored data? This cannot be undone.")) {
+      setDeposits([]);
+      setBankTransactions([]);
+      localStorage.removeItem('dbr_deposits');
+      localStorage.removeItem('dbr_transactions');
+    }
+  };
 
   const renderContent = () => {
     switch (currentView) {
@@ -98,17 +100,26 @@ const App: React.FC = () => {
             </button>
           </nav>
 
-          {updateInfo?.updateAvailable && (
-            <a
-              href={updateInfo.downloadUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="ml-4 px-3 py-2 bg-yellow-400 text-blue-900 rounded-md text-xs font-semibold shadow hover:bg-yellow-300"
-              title={`Current: ${updateInfo.current} • Latest: ${updateInfo.latest}`}
+          <div className="flex items-center gap-3">
+            {updateInfo?.updateAvailable && (
+              <a
+                href={updateInfo.downloadUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="px-3 py-2 bg-yellow-400 text-blue-900 rounded-md text-xs font-semibold shadow hover:bg-yellow-300"
+                title={`Current: ${updateInfo.current} | Latest: ${updateInfo.latest}`}
+              >
+                Update available
+              </a>
+            )}
+            <button
+              onClick={() => setSettingsOpen(true)}
+              className="px-3 py-2 bg-white/10 hover:bg-white/20 rounded-md text-xs font-semibold flex items-center gap-2"
             >
-              Update available
-            </a>
-          )}
+              <i className="fas fa-cog"></i>
+              <span className="hidden sm:inline">Settings</span>
+            </button>
+          </div>
         </div>
       </header>
 
@@ -129,6 +140,8 @@ const App: React.FC = () => {
             </button>
         </div>
       </footer>
+
+      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   );
 };

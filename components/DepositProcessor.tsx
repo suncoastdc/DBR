@@ -73,9 +73,17 @@ const DepositProcessor: React.FC<DepositProcessorProps> = ({ onSave }) => {
   };
 
   const startCaptureSession = async () => {
+    const electronAPI = (window as any).electronAPI;
     try {
-      // Request display media. 
-      // 'displaySurface: "monitor"' prefers full screen sharing if supported.
+      if (electronAPI?.captureScreen) {
+        const dataUrl = await electronAPI.captureScreen();
+        setRawCaptureSrc(dataUrl);
+        setImageSrc(null);
+        setExtractedData(null);
+        return;
+      }
+
+      // Request display media as a fallback in the browser context.
       const stream = await navigator.mediaDevices.getDisplayMedia({ 
         video: { 
             displaySurface: "monitor",
@@ -93,9 +101,7 @@ const DepositProcessor: React.FC<DepositProcessorProps> = ({ onSave }) => {
 
     } catch (err: any) {
       console.error("Screen capture cancelled or failed", err);
-      if (err.name === 'NotAllowedError' || err.message?.includes('permission') || err.message?.includes('denied')) {
-        alert("Permission denied. Please ensure you allow screen sharing when prompted.");
-      }
+      alert("Screen capture is unavailable. You can still paste a screenshot on the left.");
     }
   };
 
@@ -156,7 +162,8 @@ const DepositProcessor: React.FC<DepositProcessorProps> = ({ onSave }) => {
       const result = await parseDepositSlip(redactedImageBase64);
       setExtractedData({ ...result, sourceImage: redactedImageBase64 });
     } catch (err) {
-      alert("Failed to process image. Please try again or check your API key.");
+      console.error("AI processing failed", err);
+      alert("Failed to process image. Please check your API key in Settings and try again.");
     } finally {
       setIsProcessing(false);
     }

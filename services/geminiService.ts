@@ -1,5 +1,6 @@
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { DepositRecord } from "../types";
+import { getApiKey, getProvider } from "./settingsService";
 
 const SYSTEM_INSTRUCTION = `
 You are a specialized accounting assistant for a dental office using Dentrix software.
@@ -52,7 +53,17 @@ const normalizeDate = (dateStr?: string): string => {
 
 export const parseDepositSlip = async (base64Image: string): Promise<Partial<DepositRecord>> => {
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const provider = getProvider();
+    if (provider !== 'gemini') {
+      throw new Error('Only Gemini is supported right now. Switch provider back to Gemini in Settings.');
+    }
+
+    const apiKey = getApiKey() || process.env.GEMINI_API_KEY || process.env.API_KEY;
+    if (!apiKey) {
+      throw new Error('Missing Gemini API key. Add it in Settings.');
+    }
+
+    const ai = new GoogleGenAI({ apiKey });
     
     // Remove header if present (e.g., "data:image/png;base64,")
     const cleanBase64 = base64Image.split(',')[1] || base64Image;

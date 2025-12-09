@@ -1,7 +1,11 @@
-const { app, BrowserWindow } = require('electron');
-const path = require('path');
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { app, BrowserWindow } from 'electron';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 const isDev = !app.isPackaged;
+const openDevTools = process.env.ELECTRON_DEBUG === 'true';
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -9,12 +13,16 @@ function createWindow() {
     height: 800,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
     },
   });
 
   if (isDev) {
     win.loadURL(process.env.ELECTRON_START_URL || 'http://localhost:3000');
-    win.webContents.openDevTools({ mode: 'detach' });
+    if (openDevTools) {
+      win.webContents.openDevTools({ mode: 'detach' });
+    }
   } else {
     win.loadFile(path.join(__dirname, '..', 'dist', 'index.html'));
   }
