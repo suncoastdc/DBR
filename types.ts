@@ -14,7 +14,7 @@ export interface DepositRecord {
   date: string; // YYYY-MM-DD
   total: number;
   breakdown: DepositBreakdown;
-  sourceImage?: string; // Base64 thumbnail for reference
+  sourceImage?: string; // Small base64 thumbnail for reference
   status: 'verified' | 'pending';
   notes?: string;
 }

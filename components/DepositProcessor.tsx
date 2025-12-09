@@ -160,7 +160,9 @@ const DepositProcessor: React.FC<DepositProcessorProps> = ({ onSave }) => {
     setIsProcessing(true);
     try {
       const result = await parseDepositSlip(redactedImageBase64);
-      setExtractedData({ ...result, sourceImage: redactedImageBase64 });
+      // Store a small thumbnail to avoid bloating localStorage.
+      const compressed = await compressDataUrl(redactedImageBase64, 400, 0.6);
+      setExtractedData({ ...result, sourceImage: compressed });
     } catch (err) {
       console.error("AI processing failed", err);
       alert("Failed to process image. Please check your API key in Settings and try again.");
@@ -390,3 +392,30 @@ const DepositProcessor: React.FC<DepositProcessorProps> = ({ onSave }) => {
 };
 
 export default DepositProcessor;
+
+// Downscale/compress data URLs to keep localStorage usage low (~tens of KB).
+function compressDataUrl(dataUrl: string, maxSize = 400, quality = 0.6): Promise<string> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(img.width * scale));
+      canvas.height = Math.max(1, Math.round(img.height * scale));
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        resolve(dataUrl);
+        return;
+      }
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      try {
+        const jpeg = canvas.toDataURL('image/jpeg', quality);
+        resolve(jpeg);
+      } catch {
+        resolve(dataUrl);
+      }
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
