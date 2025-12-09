@@ -43,7 +43,10 @@ function loadGithubToken(): string | undefined {
     const candidatePaths: string[] = [];
 
     if (typeof process !== 'undefined' && (process as any).resourcesPath) {
-      candidatePaths.push(path.join((process as any).resourcesPath, 'update-token.json'));
+      const resourcesPath = (process as any).resourcesPath;
+      candidatePaths.push(path.join(resourcesPath, 'update-token.json'));
+      candidatePaths.push(path.join(resourcesPath, 'app.asar', 'build', 'update-token.json'));
+      candidatePaths.push(path.join(resourcesPath, 'app', 'build', 'update-token.json'));
     }
 
     if (typeof process !== 'undefined' && typeof process.cwd === 'function') {
