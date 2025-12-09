@@ -27,6 +27,13 @@ jobs:
       - name: Build (CI gate)
         run: npm run prebuild
 
+      - name: Upload dist artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist
+          if-no-files-found: error
+
   build:
     needs: test
     runs-on: windows-latest
@@ -50,8 +57,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            ${{ env.LOCALAPPDATA }}\electron
-            ${{ env.LOCALAPPDATA }}\electron-builder
+            ${{ env.LOCALAPPDATA }}\electron\Cache
+            ${{ env.LOCALAPPDATA }}\electron-builder\Cache
+            ${{ env.LOCALAPPDATA }}\Programs\electron
           key: ${{ runner.os }}-electron-${{ hashFiles('package-lock.json') }}
           restore-keys: |
             ${{ runner.os }}-electron-
@@ -67,7 +75,12 @@ jobs:
           $json = "{`"token`":`"$env:AUTO_UPDATE_TOKEN`"}"
           Set-Content -Path "build/update-token.json" -Value $json -Encoding UTF8
 
+      - name: Download dist artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+
       - name: Build and publish
         run: |
-          npm run prebuild
           npx electron-builder --win --x64 --publish always
