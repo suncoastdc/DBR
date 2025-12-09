@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { ModelProvider } from '../types';
 import { getApiKey, setApiKey, getProvider, setProvider } from '../services/settingsService';
+import { checkForUpdate } from '../services/updateService';
 
 interface SettingsModalProps {
   open: boolean;
@@ -11,12 +12,19 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
   const [apiKey, setApiKeyState] = useState('');
   const [provider, setProviderState] = useState<ModelProvider>('gemini');
   const [saved, setSaved] = useState(false);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [updateStatus, setUpdateStatus] = useState<string | null>(null);
+  const [updateUrl, setUpdateUrl] = useState<string | null>(null);
+  const [currentVersion, setCurrentVersion] = useState<string>('unknown');
 
   useEffect(() => {
     if (open) {
       setApiKeyState(getApiKey() || '');
       setProviderState((getProvider() as ModelProvider) || 'gemini');
       setSaved(false);
+      setUpdateStatus(null);
+      setUpdateUrl(null);
+      setCurrentVersion((import.meta.env.APP_VERSION as string) || 'unknown');
     }
   }, [open]);
 
@@ -25,6 +33,26 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
     setProvider(provider);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
+  };
+
+  const handleCheckUpdate = async () => {
+    setCheckingUpdate(true);
+    setUpdateStatus(null);
+    try {
+      const result = await checkForUpdate();
+      if (result.error) {
+        setUpdateStatus(`Check failed: ${result.error}`);
+      } else if (result.updateAvailable && result.latest) {
+        setUpdateStatus(`Update available: ${result.latest}`);
+        setUpdateUrl(result.downloadUrl || null);
+      } else {
+        setUpdateStatus(`Up to date (current ${result.current})`);
+      }
+    } catch (err: any) {
+      setUpdateStatus(`Check failed: ${err?.message || 'Unknown error'}`);
+    } finally {
+      setCheckingUpdate(false);
+    }
   };
 
   if (!open) return null;
@@ -72,6 +100,39 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
             <p className="text-xs text-gray-500 mt-1">
               Key is stored locally on this device only.
             </p>
+          </div>
+
+          <div className="border rounded p-3 bg-gray-50">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold text-gray-800">Update status</p>
+                <p className="text-xs text-gray-500">Current version: {currentVersion}</p>
+              </div>
+              <button
+                onClick={handleCheckUpdate}
+                disabled={checkingUpdate}
+                className="px-3 py-2 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50"
+              >
+                {checkingUpdate ? 'Checking…' : 'Check for updates'}
+              </button>
+            </div>
+            {updateStatus && (
+              <div className="mt-2 text-sm text-gray-700">
+                {updateStatus}
+                {updateUrl && (
+                  <div>
+                    <a
+                      href={updateUrl}
+                      className="text-indigo-600 underline text-xs"
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Download latest
+                    </a>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
