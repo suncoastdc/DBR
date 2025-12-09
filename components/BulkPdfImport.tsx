@@ -5,14 +5,14 @@ import { parseDepositSlip } from '../services/geminiService';
 import { getApiKey } from '../services/settingsService';
 import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
 import workerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+import { ImportLog, loadImportLog, saveImportLog } from '../services/importLogService';
 
 GlobalWorkerOptions.workerSrc = workerSrc;
 
 interface BulkPdfImportProps {
   onSave: (record: DepositRecord) => void;
+  onImportedDate?: (date: string) => void;
 }
-
-type ImportLog = Record<string, { date: string; importedAt: string }>;
 
 interface PdfEntry {
   name: string;
@@ -22,9 +22,7 @@ interface PdfEntry {
   status: 'new' | 'imported' | 'mismatch';
 }
 
-const IMPORT_LOG_KEY = 'dbr_imported_pdfs';
-
-const BulkPdfImport: React.FC<BulkPdfImportProps> = ({ onSave }) => {
+const BulkPdfImport: React.FC<BulkPdfImportProps> = ({ onSave, onImportedDate }) => {
   const [folderPath, setFolderPath] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -151,14 +149,17 @@ const BulkPdfImport: React.FC<BulkPdfImportProps> = ({ onSave }) => {
       [entry.path]: { date: entry.fileDate || '', importedAt: new Date().toISOString() },
     };
     setImportLog(nextLog);
-    localStorage.setItem(IMPORT_LOG_KEY, JSON.stringify(nextLog));
+    saveImportLog(nextLog);
+    if (entry.fileDate) {
+      onImportedDate?.(entry.fileDate);
+    }
     setPdfs((prev) => prev.map((p) => (p.path === entry.path ? { ...p, status: 'imported' } : p)));
   };
 
   const clearImported = () => {
     if (window.confirm('Clear imported log?')) {
       setImportLog({});
-      localStorage.removeItem(IMPORT_LOG_KEY);
+      saveImportLog({});
       setPdfs((prev) => prev.map((p) => ({ ...p, status: 'new' })));
     }
   };
@@ -195,21 +196,23 @@ const BulkPdfImport: React.FC<BulkPdfImportProps> = ({ onSave }) => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <div className="md:col-span-2 flex gap-2">
+        <div className="md:col-span-2">
           <label className="block text-sm font-medium text-gray-700">Folder path (UNC or local)</label>
-          <input
-            value={folderPath}
-            onChange={(e) => setFolderPath(e.target.value)}
-            placeholder="\\\\server\\share\\day-sheets"
-            className="mt-1 w-full border rounded px-3 py-2"
-          />
-          <button
-            onClick={pickFolder}
-            className="mt-1 px-3 py-2 text-sm bg-gray-200 hover:bg-gray-300 rounded"
-            type="button"
-          >
-            Browse
-          </button>
+          <div className="mt-1 flex gap-2">
+            <input
+              value={folderPath}
+              onChange={(e) => setFolderPath(e.target.value)}
+              placeholder="\\\\server\\share\\day-sheets"
+              className="w-full border rounded px-3 py-2"
+            />
+            <button
+              onClick={pickFolder}
+              className="px-3 py-2 text-sm bg-gray-200 hover:bg-gray-300 rounded"
+              type="button"
+            >
+              Browse
+            </button>
+          </div>
         </div>
         <div className="md:col-span-1 grid grid-cols-2 gap-2">
           <div>
@@ -329,16 +332,6 @@ const BulkPdfImport: React.FC<BulkPdfImportProps> = ({ onSave }) => {
 };
 
 export default BulkPdfImport;
-
-function loadImportLog(): ImportLog {
-  try {
-    const raw = localStorage.getItem(IMPORT_LOG_KEY);
-    if (!raw) return {};
-    return JSON.parse(raw);
-  } catch {
-    return {};
-  }
-}
 
 function parseDateFromFilename(name: string): string | undefined {
   const base = name.replace('.pdf', '');

@@ -6,6 +6,8 @@ import ReconciliationView from './components/ReconciliationView';
 import SettingsModal from './components/SettingsModal';
 import { checkForUpdate, UpdateCheckResult } from './services/updateService';
 import BulkPdfImport from './components/BulkPdfImport';
+import { getImportedDates, loadImportLog } from './services/importLogService';
+import CalendarStatus from './components/CalendarStatus';
 
 const App: React.FC = () => {
   const appVersion = import.meta.env.APP_VERSION || 'dev';
@@ -14,6 +16,7 @@ const App: React.FC = () => {
   const [bankTransactions, setBankTransactions] = useState<BankTransaction[]>([]);
   const [updateInfo, setUpdateInfo] = useState<UpdateCheckResult | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [importedDates, setImportedDates] = useState<Set<string>>(new Set());
 
   // Load from local storage on mount
   useEffect(() => {
@@ -21,6 +24,7 @@ const App: React.FC = () => {
     const savedTx = localStorage.getItem('dbr_transactions');
     if (savedDeposits) setDeposits(JSON.parse(savedDeposits));
     if (savedTx) setBankTransactions(JSON.parse(savedTx));
+    setImportedDates(getImportedDates(loadImportLog()));
   }, []);
 
   // Check for app updates on load
@@ -50,6 +54,10 @@ const App: React.FC = () => {
     setCurrentView(AppView.RECONCILE);
   };
 
+  const handleImportedDate = (date: string) => {
+    setImportedDates(prev => new Set([...Array.from(prev), date]));
+  };
+
   const handleResetData = () => {
     if (window.confirm("Are you sure you want to clear all stored data? This cannot be undone.")) {
       setDeposits([]);
@@ -69,7 +77,7 @@ const App: React.FC = () => {
       case AppView.IMPORT_BANK:
         return <BankImport onImport={handleImportBank} />;
       case AppView.IMPORT_BULK_PDF:
-        return <BulkPdfImport onSave={handleSaveDeposit} />;
+        return <BulkPdfImport onSave={handleSaveDeposit} onImportedDate={handleImportedDate} />;
       default:
         return <ReconciliationView deposits={deposits} transactions={bankTransactions} />;
     }
@@ -138,6 +146,7 @@ const App: React.FC = () => {
 
       {/* Main Content */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <CalendarStatus datesWithSheets={datesWithSheets} />
         {renderContent()}
       </main>
 
@@ -160,3 +169,7 @@ const App: React.FC = () => {
 };
 
 export default App;
+  const datesWithSheets = new Set([
+    ...Array.from(importedDates),
+    ...deposits.map(d => d.date),
+  ]);
