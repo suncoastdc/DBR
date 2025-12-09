@@ -41,6 +41,7 @@ export enum AppView {
   DASHBOARD = 'DASHBOARD',
   IMPORT_SLIPS = 'IMPORT_SLIPS',
   IMPORT_BANK = 'IMPORT_BANK',
+  IMPORT_BULK_PDF = 'IMPORT_BULK_PDF',
   RECONCILE = 'RECONCILE'
 }
 
@@ -48,6 +49,8 @@ export type ModelProvider = 'gemini' | 'openai';
 
 export interface ElectronAPI {
   captureScreen: () => Promise<string>;
+  listPdfs: (folderPath: string) => Promise<{ name: string; path: string; mtimeMs: number }[]>;
+  readPdfBase64: (filePath: string) => Promise<string>;
 }
 
 declare global {
