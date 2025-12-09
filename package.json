@@ -47,8 +47,8 @@
     "publish": [
       {
         "provider": "github",
-        "owner": "mygithubusername",
-        "repo": "myelectronapp"
+        "owner": "suncoastdc",
+        "repo": "DBR"
       }
     ]
   }
