@@ -43,8 +43,9 @@ function createWindow() {
     width: 1200,
     height: 800,
     webPreferences: {
-      contextIsolation: false,
-      nodeIntegration: true
+      contextIsolation: true,
+      nodeIntegration: false,
+      preload: path.join(__dirname, 'electron', 'preload.js')
     }
   });
 

@@ -1,7 +1,6 @@
-import { contextBridge, desktopCapturer, screen } from 'electron';
-import fs from 'node:fs/promises';
-import path from 'node:path';
-import { ipcRenderer } from 'electron';
+const { contextBridge, desktopCapturer, screen, ipcRenderer } = require('electron');
+const fs = require('node:fs/promises');
+const path = require('node:path');
 
 const captureScreen = async () => {
   const primary = screen.getPrimaryDisplay();
