@@ -41,6 +41,7 @@
     "files": [
       "dist/**/*",
       "main.js",
+      "electron/preload.js",
       "package.json",
       "build/icon.ico",
       "build/update-token.json"
