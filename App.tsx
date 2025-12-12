@@ -1,13 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { AppView, DepositRecord, BankTransaction } from './types';
-import DepositProcessor from './components/DepositProcessor';
 import BankImport from './components/BankImport';
 import ReconciliationView from './components/ReconciliationView';
 import SettingsModal from './components/SettingsModal';
 import { checkForUpdate, UpdateCheckResult } from './services/updateService';
-import BulkPdfImport from './components/BulkPdfImport';
 import { getImportedDates, loadImportLog } from './services/importLogService';
 import CalendarStatus from './components/CalendarStatus';
+import DaySheetWorkspace from './components/DaySheetWorkspace';
 
 const App: React.FC = () => {
   const appVersion = import.meta.env.APP_VERSION || 'dev';
@@ -78,11 +77,9 @@ const App: React.FC = () => {
       case AppView.RECONCILE:
         return <ReconciliationView deposits={deposits} transactions={bankTransactions} />;
       case AppView.IMPORT_SLIPS:
-        return <DepositProcessor onSave={handleSaveDeposit} />;
+        return <DaySheetWorkspace onSave={handleSaveDeposit} onImportedDate={handleImportedDate} />;
       case AppView.IMPORT_BANK:
         return <BankImport onImport={handleImportBank} />;
-      case AppView.IMPORT_BULK_PDF:
-        return <BulkPdfImport onSave={handleSaveDeposit} onImportedDate={handleImportedDate} />;
       default:
         return <ReconciliationView deposits={deposits} transactions={bankTransactions} />;
     }
@@ -105,23 +102,17 @@ const App: React.FC = () => {
             >
               <i className="fas fa-columns sm:mr-2"></i><span className="hidden sm:inline">Reconcile</span>
             </button>
-            <button 
+            <button
               onClick={() => setCurrentView(AppView.IMPORT_SLIPS)}
               className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${currentView === AppView.IMPORT_SLIPS ? 'bg-blue-900 text-white' : 'text-blue-100 hover:bg-blue-700'}`}
             >
-              <i className="fas fa-file-medical sm:mr-2"></i><span className="hidden sm:inline">Add Day Sheet</span>
+              <i className="fas fa-file-medical sm:mr-2"></i><span className="hidden sm:inline">Day Sheets</span>
             </button>
-            <button 
+            <button
               onClick={() => setCurrentView(AppView.IMPORT_BANK)}
               className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${currentView === AppView.IMPORT_BANK ? 'bg-blue-900 text-white' : 'text-blue-100 hover:bg-blue-700'}`}
             >
               <i className="fas fa-university sm:mr-2"></i><span className="hidden sm:inline">Import Bank</span>
-            </button>
-            <button 
-              onClick={() => setCurrentView(AppView.IMPORT_BULK_PDF)}
-              className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${currentView === AppView.IMPORT_BULK_PDF ? 'bg-blue-900 text-white' : 'text-blue-100 hover:bg-blue-700'}`}
-            >
-              <i className="fas fa-file-pdf sm:mr-2"></i><span className="hidden sm:inline">Bulk PDFs</span>
             </button>
           </nav>
 
