@@ -95,8 +95,9 @@ function createWindow() {
     },
   });
 
+  const devUrl = process.env.ELECTRON_START_URL || 'http://localhost:5173';
   if (isDev) {
-    mainWindow.loadURL(process.env.ELECTRON_START_URL || 'http://localhost:3000');
+    mainWindow.loadURL(devUrl);
     if (openDevTools) {
       mainWindow.webContents.openDevTools({ mode: 'detach' });
     }

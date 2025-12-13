@@ -1,0 +1,72 @@
+name: Auto Bump Version on Merge
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: write
+
+jobs:
+  bump:
+    if: github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'main'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout base branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.ref }}
+          fetch-depth: 0
+
+      - name: Determine if this PR already triggered a bump
+        id: skip
+        run: |
+          MERGE_SHA="${{ github.event.pull_request.merge_commit_sha }}"
+          if [ -z "$MERGE_SHA" ]; then
+            echo "merge commit missing; cannot safely bump"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if git log "${MERGE_SHA}..HEAD" --author="github-actions[bot]" --grep="chore: bump version" --oneline | head -n 1; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Node
+        if: steps.skip.outputs.skip == 'false'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Configure git user
+        if: steps.skip.outputs.skip == 'false'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump patch version
+        if: steps.skip.outputs.skip == 'false'
+        run: |
+          npm version patch --no-git-tag-version
+          NEW_VERSION=$(node -p "require('./package.json').version")
+          echo "new_version=$NEW_VERSION" >> "$GITHUB_ENV"
+
+      - name: Commit version bump
+        if: steps.skip.outputs.skip == 'false'
+        run: |
+          git status
+          git commit -am "chore: bump version to ${{ env.new_version }}"
+
+      - name: Push bump commit
+        if: steps.skip.outputs.skip == 'false'
+        run: |
+          git push origin "${{ github.event.pull_request.base.ref }}"
+
+      - name: Tag release
+        if: steps.skip.outputs.skip == 'false'
+        run: |
+          git tag "v${{ env.new_version }}"
+          git push origin "v${{ env.new_version }}"
