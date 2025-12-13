@@ -3,9 +3,14 @@ import { BankTransaction } from '../types';
 
 interface BankImportProps {
   onImport: (transactions: BankTransaction[]) => void;
+  existingTransactions: BankTransaction[];
 }
 
-const BankImport: React.FC<BankImportProps> = ({ onImport }) => {
+const normalizeDescription = (value: string) => value.replace(/\s+/g, ' ').trim().toLowerCase();
+const buildSignature = (tx: Pick<BankTransaction, 'date' | 'description' | 'amount'>) =>
+  `${tx.date}|${normalizeDescription(tx.description)}|${tx.amount.toFixed(2)}`;
+
+const BankImport: React.FC<BankImportProps> = ({ onImport, existingTransactions }) => {
   const [csvText, setCsvText] = useState<string>('');
   const [preview, setPreview] = useState<BankTransaction[]>([]);
   
@@ -27,60 +32,123 @@ const BankImport: React.FC<BankImportProps> = ({ onImport }) => {
     const lines = text.split(/\r?\n/).filter(line => line.trim() !== '');
     if (lines.length < 2) return;
 
-    // Detect headers roughly or just assume structure. 
-    // For MVP, we'll try to find index of Date, Description, Amount.
-    // If we can't find them, we default to 0, 1, 2.
-    
-    // We will skip the first row assuming it's header
+    const headers = splitCsvLine(lines[0]).map(h => h.replace(/\"/g, '').trim());
+    const lowerHeaders = headers.map(h => h.toLowerCase());
     const dataLines = lines.slice(1);
-    
-    const parsed: BankTransaction[] = dataLines.map((line, idx) => {
-      // Handle simple CSV splitting (doesn't handle quoted commas perfectly, but sufficient for standard bank exports)
-      const cols = line.split(',').map(c => c.replace(/"/g, '').trim());
-      
-      // Heuristic: usually Date is col 0, Amount is last or near last.
-      // Let's look for a date-like string
-      let dateIdx = 0;
-      let amountIdx = cols.length - 1;
-      let descIdx = 1;
 
-      // Try to improve parsing if user provides a specific format later, 
-      // but for now, let's just grab the most likely columns.
-      // Simple fallback:
-      const dateStr = cols[0]; 
-      const amountStr = cols[cols.length - 1]; // Often the last column is balance or amount. 
-      // If the last column is Balance, amount is usually second to last.
-      // Let's try to parse the last column as a float.
-      let amount = parseFloat(amountStr.replace(/[^0-9.-]+/g,""));
-      
-      // If amount is NaN, try the previous column (sometimes last col is Balance)
-      if (isNaN(amount) && cols.length > 2) {
-         amount = parseFloat(cols[cols.length - 2].replace(/[^0-9.-]+/g,""));
+    const findIndex = (candidates: string[]) =>
+      lowerHeaders.findIndex(h => candidates.some(c => h.includes(c)));
+
+    const dateIdx = findIndex(['date', 'post date', 'posting date']);
+    const descriptionIdx = findIndex(['description', 'name', 'memo', 'details']);
+    const creditIdx = findIndex(['credit', 'deposit', 'amount cr', 'amount (cr)']);
+    const debitIdx = findIndex(['debit', 'withdrawal', 'amount dr', 'amount (dr)']);
+    const amountIdx = findIndex(['amount']);
+
+    const parsed: BankTransaction[] = dataLines.map((line, idx) => {
+      const cols = splitCsvLine(line).map(c => c.replace(/\"/g, '').trim());
+
+      const dateStr = getColumn(cols, dateIdx, 0);
+      const description = getColumn(cols, descriptionIdx, 1) || 'Imported Transaction';
+
+      const rawCredit = creditIdx !== -1 ? cols[creditIdx] : undefined;
+      const rawDebit = debitIdx !== -1 ? cols[debitIdx] : undefined;
+      const rawAmount = amountIdx !== -1 ? cols[amountIdx] : undefined;
+
+      let amount = parseMoney(rawCredit ?? rawAmount ?? '');
+      if (!amount && rawDebit) {
+        amount = -parseMoney(rawDebit);
       }
-      
+
       return {
         id: `bank-${Date.now()}-${idx}`,
         date: formatDate(dateStr),
-        description: cols[1] || 'Imported Transaction',
-        amount: isNaN(amount) ? 0 : amount
+        description,
+        amount: amount || 0
       };
-    }).filter(t => t.amount > 0); // We are looking for deposits only (credits)
+    }).filter(t => t.amount > 0) // We are looking for deposits only (credits)
+      .sort((a, b) => a.date.localeCompare(b.date));
 
-    setPreview(parsed);
+    const existingSignatures = new Set(existingTransactions.map(tx => buildSignature(tx)));
+    const unique: BankTransaction[] = [];
+
+    parsed.forEach(tx => {
+      const signature = buildSignature(tx);
+      if (existingSignatures.has(signature)) return;
+      if (unique.some(item => buildSignature(item) === signature)) return;
+      unique.push(tx);
+    });
+
+    setPreview(unique);
+  };
+
+  const splitCsvLine = (line: string): string[] => {
+    const cells: string[] = [];
+    let current = '';
+    let inQuotes = false;
+
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      const nextChar = line[i + 1];
+
+      if (char === '"') {
+        if (inQuotes && nextChar === '"') {
+          current += '"';
+          i++; // skip escaped quote
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (char === ',' && !inQuotes) {
+        cells.push(current);
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+
+    cells.push(current);
+    return cells;
+  };
+
+  const getColumn = (cols: string[], idx: number, fallback: number) => {
+    return cols[idx !== -1 ? idx : fallback] || '';
+  };
+
+  const parseMoney = (value: string | undefined): number => {
+    if (!value) return 0;
+    const normalized = value.includes('(') && value.includes(')')
+      ? `-${value}`
+      : value;
+    const cleaned = normalized.replace(/[^0-9.-]/g, '');
+    const amount = parseFloat(cleaned);
+    return isNaN(amount) ? 0 : amount;
   };
 
   const formatDate = (raw: string): string => {
-    // Attempt to convert MM/DD/YYYY to YYYY-MM-DD
-    try {
-      const parts = raw.split('/');
-      if (parts.length === 3) {
-        // Assume MM/DD/YYYY
-        return `${parts[2]}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`;
-      }
-      return new Date(raw).toISOString().split('T')[0];
-    } catch {
-      return new Date().toISOString().split('T')[0];
+    const value = raw.trim();
+    const today = new Date().toISOString().split('T')[0];
+
+    if (!value) return today;
+
+    const slashParts = value.split('/');
+    if (slashParts.length === 3) {
+      const [m, d, y] = slashParts;
+      const year = y.length === 2 ? `20${y}` : y;
+      return `${year.padStart(4, '0')}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
     }
+
+    const dashParts = value.split('-');
+    if (dashParts.length === 3 && dashParts[0].length === 4) {
+      const [year, month, day] = dashParts;
+      return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+    }
+
+    const parsed = new Date(value);
+    if (!isNaN(parsed.getTime())) {
+      return parsed.toISOString().split('T')[0];
+    }
+
+    return today;
   };
 
   const handleConfirm = () => {

@@ -40,16 +40,29 @@ const App: React.FC = () => {
     localStorage.setItem('dbr_transactions', JSON.stringify(bankTransactions));
   }, [bankTransactions]);
 
+  const normalizeDescription = (value: string) => value.replace(/\s+/g, ' ').trim().toLowerCase();
+  const buildSignature = (tx: Pick<BankTransaction, 'date' | 'description' | 'amount'>) =>
+    `${tx.date}|${normalizeDescription(tx.description)}|${tx.amount.toFixed(2)}`;
+
   const handleSaveDeposit = (record: DepositRecord) => {
     setDeposits(prev => [...prev, record]);
     setCurrentView(AppView.RECONCILE);
   };
 
   const handleImportBank = (txs: BankTransaction[]) => {
-    // Append new transactions, avoiding duplicates by ID if possible, 
-    // but here we just append since IDs are timestamp based.
-    // In a real app, we'd dedup based on hash of content.
-    setBankTransactions(prev => [...prev, ...txs]);
+    setBankTransactions(prev => {
+      const seen = new Set(prev.map(tx => buildSignature(tx)));
+      const merged = [...prev];
+
+      txs.forEach(tx => {
+        const signature = buildSignature(tx);
+        if (seen.has(signature)) return;
+        seen.add(signature);
+        merged.push(tx);
+      });
+
+      return merged.sort((a, b) => a.date.localeCompare(b.date));
+    });
     setCurrentView(AppView.RECONCILE);
   };
 
@@ -79,7 +92,7 @@ const App: React.FC = () => {
       case AppView.IMPORT_SLIPS:
         return <DaySheetWorkspace onSave={handleSaveDeposit} onImportedDate={handleImportedDate} />;
       case AppView.IMPORT_BANK:
-        return <BankImport onImport={handleImportBank} />;
+        return <BankImport onImport={handleImportBank} existingTransactions={bankTransactions} />;
       default:
         return <ReconciliationView deposits={deposits} transactions={bankTransactions} />;
     }
