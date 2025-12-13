@@ -1,7 +1,7 @@
 {
   "name": "dbr-dentrix-bank-reconciler",
-  "version": "1.0.17",
-  "main": "main.js",
+  "version": "1.0.18",
+  "main": "electron/main.js",
   "author": "MyElectronApp Developer",
   "scripts": {
     "start": "electron .",
@@ -40,7 +40,7 @@
     "icon": "build/icon.ico",
     "files": [
       "dist/**/*",
-      "main.js",
+      "electron/main.js",
       "electron/preload.js",
       "package.json",
       "build/icon.ico",
