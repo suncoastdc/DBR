@@ -9,6 +9,7 @@ export type UpdateCheckResult = {
 const REPO_SLUG = 'suncoastdc/DBR';
 const DEFAULT_BRANCH = 'main';
 const REMOTE_PACKAGE_URL = `https://api.github.com/repos/${REPO_SLUG}/contents/package.json?ref=${DEFAULT_BRANCH}`;
+const RELEASE_API = `https://api.github.com/repos/${REPO_SLUG}/releases/latest`;
 const RELEASE_PAGE = `https://github.com/${REPO_SLUG}/releases/latest`;
 const FALLBACK_DOWNLOAD = RELEASE_PAGE;
 
@@ -80,6 +81,22 @@ function compareVersions(a: string, b: string): number {
   return 0;
 }
 
+async function fetchLatestRelease(headers: Record<string, string>) {
+  const resp = await fetch(RELEASE_API, { headers });
+  if (!resp.ok) {
+    throw new Error(`Release lookup failed with ${resp.status}`);
+  }
+  return resp.json() as Promise<{
+    tag_name?: string;
+    html_url?: string;
+    assets?: { browser_download_url?: string }[];
+  }>;
+}
+
+function stripPrefix(v: string | undefined) {
+  return v?.replace(/^v/, '');
+}
+
 export async function checkForUpdate(): Promise<UpdateCheckResult> {
   try {
     const headers: Record<string, string> = {
@@ -89,6 +106,24 @@ export async function checkForUpdate(): Promise<UpdateCheckResult> {
     const token = loadGithubToken();
     if (token) headers.Authorization = `token ${token}`;
 
+    // Prefer the releases API so we can link to an actual downloadable asset.
+    try {
+      const release = await fetchLatestRelease(headers);
+      const latest = stripPrefix(release.tag_name) || '0.0.0';
+      const assetDownload = release.assets?.find(a => a.browser_download_url)?.browser_download_url;
+      const updateAvailable = compareVersions(latest, currentVersion) > 0;
+
+      return {
+        current: currentVersion,
+        latest,
+        updateAvailable,
+        downloadUrl: assetDownload || release.html_url || RELEASE_PAGE,
+      };
+    } catch (releaseErr) {
+      console.warn('Release API failed, falling back to package.json', releaseErr);
+    }
+
+    // Fallback: read package.json from main.
     const resp = await fetch(REMOTE_PACKAGE_URL, { headers });
     if (!resp.ok) {
       const hint = resp.status === 404 ? ' (repo may be private or token missing)' : '';
