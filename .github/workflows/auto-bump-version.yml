@@ -29,7 +29,8 @@ jobs:
             exit 0
           fi
 
-          if git log "${MERGE_SHA}..HEAD" --author="github-actions[bot]" --grep="chore: bump version" --oneline | head -n 1; then
+          BUMP_SEEN=$(git log "${MERGE_SHA}..HEAD" --author="github-actions[bot]" --grep="chore: bump version" --oneline | head -n 1)
+          if [ -n "$BUMP_SEEN" ]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
