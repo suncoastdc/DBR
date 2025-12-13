@@ -1,5 +1,15 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { BankTransaction } from '../types';
+import {
+  inferPaymentType,
+  loadPaymentRules,
+  PaymentRule,
+  PaymentTypeKey,
+  RuleSuggestion,
+  createPatternFromDescription,
+  suggestRulesFromTransactions,
+  upsertPaymentRule,
+} from '../services/paymentRulesService';
 
 interface BankImportProps {
   onImport: (transactions: BankTransaction[]) => void;
@@ -12,6 +22,9 @@ const buildSignature = (tx: Pick<BankTransaction, 'date' | 'description' | 'amou
 
 const BankImport: React.FC<BankImportProps> = ({ onImport, existingTransactions }) => {
   const [preview, setPreview] = useState<BankTransaction[]>([]);
+  const [paymentRules, setPaymentRules] = useState<PaymentRule[]>(() => loadPaymentRules());
+  const [ruleSuggestions, setRuleSuggestions] = useState<RuleSuggestion[]>([]);
+  const [suggestionSelections, setSuggestionSelections] = useState<Record<string, PaymentTypeKey | ''>>({});
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -79,7 +92,75 @@ const BankImport: React.FC<BankImportProps> = ({ onImport, existingTransactions 
       unique.push(tx);
     });
 
-    setPreview(unique);
+    const decorated = applyRules(unique, paymentRules);
+    setPreview(decorated);
+  };
+
+  const applyRules = (transactions: BankTransaction[], rules: PaymentRule[]) =>
+    transactions.map((tx) => ({ ...tx, paymentType: inferPaymentType(tx.description, rules) }));
+
+  const refreshSuggestions = (transactions: BankTransaction[], rules: PaymentRule[]) => {
+    const nextSuggestions = suggestRulesFromTransactions(transactions, rules);
+    setRuleSuggestions(nextSuggestions);
+    const seeded: Record<string, PaymentTypeKey | ''> = {};
+    nextSuggestions.forEach((s) => {
+      if (s.suggestedType) seeded[s.pattern] = s.suggestedType;
+    });
+    setSuggestionSelections(seeded);
+  };
+
+  useEffect(() => {
+    refreshSuggestions(preview, paymentRules);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preview, paymentRules]);
+
+  const handleSaveRule = (suggestion: RuleSuggestion) => {
+    const chosen = suggestionSelections[suggestion.pattern] || suggestion.suggestedType;
+    if (!chosen) {
+      alert('Pick a payment type before saving this rule.');
+      return;
+    }
+    const updatedRules = upsertPaymentRule(suggestion.pattern, chosen, 'learned');
+    setPaymentRules(updatedRules);
+    const updatedPreview = applyRules(preview, updatedRules);
+    setPreview(updatedPreview);
+  };
+
+  const updatePaymentType = (id: string, type: PaymentTypeKey | '') => {
+    const next = preview.map((tx) => (tx.id === id ? { ...tx, paymentType: type || undefined } : tx));
+    setPreview(next);
+  };
+
+  const handleSaveRuleFromRow = (tx: BankTransaction) => {
+    if (!tx.paymentType) {
+      alert('Select a payment type first.');
+      return;
+    }
+
+    const pattern = createPatternFromDescription(tx.description);
+    if (!pattern) {
+      alert('Could not derive a reusable pattern from this description.');
+      return;
+    }
+
+    const updatedRules = upsertPaymentRule(pattern, tx.paymentType, 'manual');
+    setPaymentRules(updatedRules);
+    const updatedPreview = applyRules(preview, updatedRules);
+    setPreview(updatedPreview);
+  };
+
+  const paymentTypeLabel = (type?: PaymentTypeKey) => {
+    if (!type) return 'Unmapped';
+    return {
+      cash: 'Cash',
+      checks: 'Checks',
+      insuranceChecks: 'Insurance checks',
+      creditCards: 'Credit cards',
+      careCredit: 'CareCredit',
+      cherry: 'Cherry',
+      eft: 'ACH / EFT',
+      other: 'Other',
+    }[type];
   };
 
   const splitCsvLine = (line: string): string[] => {
@@ -183,6 +264,7 @@ const BankImport: React.FC<BankImportProps> = ({ onImport, existingTransactions 
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Payment type</th>
                   <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
                 </tr>
               </thead>
@@ -191,6 +273,40 @@ const BankImport: React.FC<BankImportProps> = ({ onImport, existingTransactions 
                   <tr key={tx.id}>
                     <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-900">{tx.date}</td>
                     <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-500">{tx.description}</td>
+                    <td className="px-6 py-2 whitespace-nowrap text-sm">
+                      <div className="flex flex-col gap-2">
+                        <div className="flex items-center gap-2">
+                          <select
+                            className="border rounded px-2 py-1 text-sm"
+                            value={tx.paymentType || ''}
+                            onChange={(e) => updatePaymentType(tx.id, e.target.value as PaymentTypeKey)}
+                          >
+                            <option value="">Pick type</option>
+                            <option value="cash">Cash</option>
+                            <option value="checks">Checks</option>
+                            <option value="insuranceChecks">Insurance checks</option>
+                            <option value="creditCards">Credit cards</option>
+                            <option value="careCredit">CareCredit</option>
+                            <option value="cherry">Cherry</option>
+                            <option value="eft">ACH / EFT</option>
+                            <option value="other">Other</option>
+                          </select>
+                          <button
+                            className="text-xs text-indigo-700 underline disabled:text-gray-400"
+                            type="button"
+                            disabled={!tx.paymentType}
+                            onClick={() => handleSaveRuleFromRow(tx)}
+                          >
+                            Save rule
+                          </button>
+                        </div>
+                        <p className="text-[11px] text-gray-400">
+                          {tx.paymentType
+                            ? `Tagged as ${paymentTypeLabel(tx.paymentType)} — save as a rule to reuse for matching descriptions.`
+                            : 'No rule yet'}
+                        </p>
+                      </div>
+                    </td>
                     <td className="px-6 py-2 whitespace-nowrap text-sm text-right font-medium text-green-600">
                       ${tx.amount.toFixed(2)}
                     </td>
@@ -198,6 +314,63 @@ const BankImport: React.FC<BankImportProps> = ({ onImport, existingTransactions 
                 ))}
               </tbody>
             </table>
+          </div>
+
+          <div className="mt-4 bg-blue-50 border border-blue-100 rounded p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="font-semibold text-blue-900">Teach payment types faster</h4>
+                <p className="text-xs text-blue-800">We look for repeat bank descriptions and propose a mapping.</p>
+              </div>
+              <span className="text-[11px] text-blue-700">{paymentRules.length} rules saved</span>
+            </div>
+
+            {ruleSuggestions.length === 0 && (
+              <p className="text-sm text-blue-700">No new descriptions to learn from in this import.</p>
+            )}
+
+            {ruleSuggestions.length > 0 && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {ruleSuggestions.map((s) => (
+                  <div key={s.pattern} className="bg-white rounded border border-blue-100 p-3 shadow-sm">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-semibold text-gray-800">{s.pattern}</p>
+                        <p className="text-[11px] text-gray-500">Seen {s.count} time(s) in this file</p>
+                      </div>
+                      <div className="text-[11px] text-gray-500">Suggested: {paymentTypeLabel(s.suggestedType)}</div>
+                    </div>
+                    <div className="mt-2 flex items-center gap-2">
+                      <select
+                        className="border rounded px-2 py-1 text-sm"
+                        value={suggestionSelections[s.pattern] || ''}
+                        onChange={(e) =>
+                          setSuggestionSelections((prev) => ({ ...prev, [s.pattern]: e.target.value as PaymentTypeKey }))
+                        }
+                      >
+                        <option value="">Pick type</option>
+                        <option value="cash">Cash</option>
+                        <option value="checks">Checks</option>
+                        <option value="insuranceChecks">Insurance checks</option>
+                        <option value="creditCards">Credit cards</option>
+                        <option value="careCredit">CareCredit</option>
+                        <option value="cherry">Cherry</option>
+                        <option value="eft">ACH / EFT</option>
+                        <option value="other">Other</option>
+                      </select>
+                      <button
+                        onClick={() => handleSaveRule(s)}
+                        className="px-3 py-1 bg-indigo-600 text-white text-sm rounded hover:bg-indigo-700 disabled:opacity-60"
+                        disabled={!suggestionSelections[s.pattern] && !s.suggestedType}
+                        type="button"
+                      >
+                        Save rule & tag matches
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}

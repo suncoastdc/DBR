@@ -24,6 +24,7 @@ export interface BankTransaction {
   date: string; // YYYY-MM-DD
   description: string;
   amount: number; // Positive for deposit
+  paymentType?: keyof DepositBreakdown; // Learned mapping from bank description
   category?: string;
 }
 

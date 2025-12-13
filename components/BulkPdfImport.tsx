@@ -32,8 +32,10 @@ const BulkPdfImport: React.FC<BulkPdfImportProps> = ({ onSave, onImportedDate })
   const [importLog, setImportLog] = useState<ImportLog>(() => loadImportLog());
   const [selectedPdf, setSelectedPdf] = useState<PdfEntry | null>(null);
   const [pageImages, setPageImages] = useState<string[]>([]);
+  const [selectedPageIndex, setSelectedPageIndex] = useState(0);
   const [redactImage, setRedactImage] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<string>('');
 
   const filteredPdfs = useMemo(() => {
     if (!startDate || !endDate) return pdfs;
@@ -98,11 +100,16 @@ const BulkPdfImport: React.FC<BulkPdfImportProps> = ({ onSave, onImportedDate })
   const openPages = async (entry: PdfEntry) => {
     setSelectedPdf(entry);
     setPageImages([]);
+    setSelectedPageIndex(0);
     setRedactImage(null);
+    setSelectedDate(entry.pdfDate || entry.fileDate || '');
     setError(null);
     try {
       const pages = await renderPdfPages(entry.path, 1000);
       setPageImages(pages);
+      if (pages.length > 0) {
+        setSelectedPageIndex(0);
+      }
     } catch (err: any) {
       console.error(err);
       setError(err?.message || 'Failed to render PDF pages.');
@@ -115,19 +122,28 @@ const BulkPdfImport: React.FC<BulkPdfImportProps> = ({ onSave, onImportedDate })
     try {
       const result = await parseDepositSlip(redactedImageBase64);
       const compressed = await compressDataUrl(redactedImageBase64, 400, 0.6);
+      const assignedDate = selectedDate || result.date;
+      if (!assignedDate) {
+        alert('Select a date before saving this day sheet.');
+        setIsProcessing(false);
+        return;
+      }
       const record: DepositRecord = {
         id: crypto.randomUUID(),
-        date: result.date,
+        date: assignedDate,
         total: result.total || 0,
         breakdown: (result.breakdown || {}) as DepositBreakdown,
         status: 'pending',
         sourceImage: compressed,
       };
       onSave(record);
-      markImported(selectedPdf);
+      markImported(selectedPdf, assignedDate);
       setSelectedPdf(null);
       setPageImages([]);
+      setSelectedPageIndex(0);
       setRedactImage(null);
+      setSelectedDate('');
+      openNextPending();
     } catch (err) {
       console.error('Processing failed', err);
       alert('Failed to process page. Please ensure API key is set and try again.');
@@ -143,15 +159,15 @@ const BulkPdfImport: React.FC<BulkPdfImportProps> = ({ onSave, onImportedDate })
     }
   };
 
-  const markImported = (entry: PdfEntry) => {
+  const markImported = (entry: PdfEntry, assignedDate?: string) => {
     const nextLog = {
       ...importLog,
-      [entry.path]: { date: entry.fileDate || '', importedAt: new Date().toISOString() },
+      [entry.path]: { date: assignedDate || entry.fileDate || '', importedAt: new Date().toISOString() },
     };
     setImportLog(nextLog);
     saveImportLog(nextLog);
-    if (entry.fileDate) {
-      onImportedDate?.(entry.fileDate);
+    if (assignedDate || entry.fileDate) {
+      onImportedDate?.(assignedDate || entry.fileDate);
     }
     setPdfs((prev) => prev.map((p) => (p.path === entry.path ? { ...p, status: 'imported' } : p)));
   };
@@ -161,6 +177,15 @@ const BulkPdfImport: React.FC<BulkPdfImportProps> = ({ onSave, onImportedDate })
       setImportLog({});
       saveImportLog({});
       setPdfs((prev) => prev.map((p) => ({ ...p, status: 'new' })));
+    }
+  };
+
+  const nextPending = () => filteredPdfs.find((p) => p.status !== 'imported');
+
+  const openNextPending = () => {
+    const next = nextPending();
+    if (next) {
+      openPages(next);
     }
   };
 
@@ -189,6 +214,25 @@ const BulkPdfImport: React.FC<BulkPdfImportProps> = ({ onSave, onImportedDate })
         <div>
           <h2 className="text-2xl font-bold text-gray-800">Bulk Import Day Sheets (PDF)</h2>
           <p className="text-sm text-gray-500">Scans PDFs from a folder, checks dates, and lets you redact pages before AI.</p>
+        </div>
+        <div className="text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded px-3 py-2 max-w-xs">
+          <div className="font-semibold text-gray-800 mb-1">OCR status</div>
+          <ul className="list-disc list-inside space-y-0.5">
+            <li>PDF text is read locally to suggest the slip date.</li>
+            <li>Redacted pages use Gemini Vision to OCR totals (online).</li>
+          </ul>
+        </div>
+        <div className="text-right text-xs text-gray-600">
+          <div className="font-semibold text-gray-700">Batch helper</div>
+          <div>{filteredPdfs.filter((p) => p.status !== 'imported').length} remaining in range</div>
+          <button
+            onClick={openNextPending}
+            className="mt-1 text-blue-600 underline hover:text-blue-800 disabled:text-gray-400"
+            disabled={!nextPending()}
+            type="button"
+          >
+            Open next pending
+          </button>
         </div>
         <button onClick={clearImported} className="text-xs text-red-500 hover:text-red-700 underline">
           Clear imported log
@@ -259,6 +303,7 @@ const BulkPdfImport: React.FC<BulkPdfImportProps> = ({ onSave, onImportedDate })
                 <th className="px-3 py-2 text-left font-semibold text-gray-600">File</th>
                 <th className="px-3 py-2 text-left font-semibold text-gray-600">File Date</th>
                 <th className="px-3 py-2 text-left font-semibold text-gray-600">PDF Date</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-600">Saved Date</th>
                 <th className="px-3 py-2 text-left font-semibold text-gray-600">Status</th>
                 <th className="px-3 py-2 text-right font-semibold text-gray-600">Actions</th>
               </tr>
@@ -277,6 +322,9 @@ const BulkPdfImport: React.FC<BulkPdfImportProps> = ({ onSave, onImportedDate })
                         Read
                       </button>
                     )}
+                  </td>
+                  <td className="px-3 py-2 text-gray-700">
+                    {importLog[pdf.path]?.date || '—'}
                   </td>
                   <td className="px-3 py-2">
                     {pdf.status === 'imported' && <span className="text-green-600 font-semibold">Imported</span>}
@@ -303,23 +351,94 @@ const BulkPdfImport: React.FC<BulkPdfImportProps> = ({ onSave, onImportedDate })
           <div className="flex items-center justify-between mb-3">
             <div>
               <h3 className="text-lg font-semibold text-gray-800">{selectedPdf.name}</h3>
-              <p className="text-xs text-gray-500">Choose a page to redact before AI sees it.</p>
+              <p className="text-xs text-gray-500">
+                Choose the page with totals, redact PHI, and confirm the posting date.
+              </p>
             </div>
             <button onClick={() => { setSelectedPdf(null); setPageImages([]); }} className="text-sm text-gray-500 hover:text-gray-700">
               Close
             </button>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-h-[480px] overflow-auto">
-            {pageImages.map((img, idx) => (
-              <button
-                key={idx}
-                onClick={() => setRedactImage(img)}
-                className="border rounded shadow-sm hover:shadow-md transition overflow-hidden bg-white text-left"
-              >
-                <img src={img} alt={`Page ${idx + 1}`} className="w-full object-contain max-h-64 bg-gray-50" />
-                <div className="px-3 py-2 text-sm font-medium text-gray-700">Page {idx + 1}</div>
-              </button>
-            ))}
+          <div className="mb-4 grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+            <div className="md:col-span-2 text-sm text-gray-600 bg-blue-50 border border-blue-100 px-3 py-2 rounded">
+              <p className="font-semibold text-blue-800">How to use</p>
+              <ul className="list-disc list-inside text-blue-800">
+                <li>Select the page thumbnail that shows the totals by payment type.</li>
+                <li>Use the large preview to double-check before redacting.</li>
+                <li>Redact patient details on the next screen before sending to AI.</li>
+                <li>Confirm the date below so the system remembers this day sheet.</li>
+              </ul>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-600">Assign to date</label>
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="mt-1 w-full border rounded px-3 py-2"
+              />
+              <p className="text-[11px] text-gray-500 mt-1">Defaults to PDF or file date.</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+            <div className="lg:col-span-3">
+              <div className="border rounded bg-gray-50 p-3 flex flex-col gap-3">
+                <div className="flex items-center justify-between text-sm text-gray-600">
+                  <span>
+                    Page {selectedPageIndex + 1} of {pageImages.length}
+                  </span>
+                  <div className="space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedPageIndex((prev) => Math.max(0, prev - 1))}
+                      disabled={selectedPageIndex === 0}
+                      className="px-2 py-1 bg-white border rounded disabled:opacity-50"
+                    >
+                      Prev
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedPageIndex((prev) => Math.min(pageImages.length - 1, prev + 1))}
+                      disabled={selectedPageIndex === pageImages.length - 1}
+                      className="px-2 py-1 bg-white border rounded disabled:opacity-50"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+                <div className="bg-white border rounded shadow-sm overflow-hidden flex justify-center">
+                  <img
+                    src={pageImages[selectedPageIndex]}
+                    alt={`Page ${selectedPageIndex + 1}`}
+                    className="max-h-[520px] object-contain"
+                  />
+                </div>
+                <div className="flex justify-end">
+                  <button
+                    onClick={() => setRedactImage(pageImages[selectedPageIndex])}
+                    className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
+                  >
+                    Redact selected page
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div className="lg:col-span-2 max-h-[620px] overflow-auto border rounded p-2">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                {pageImages.map((img, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => setSelectedPageIndex(idx)}
+                    className={`border rounded shadow-sm overflow-hidden bg-white text-left transition ${
+                      idx === selectedPageIndex ? 'ring-2 ring-indigo-500' : 'hover:shadow-md'
+                    }`}
+                  >
+                    <img src={img} alt={`Page ${idx + 1}`} className="w-full object-contain max-h-48 bg-gray-50" />
+                    <div className="px-3 py-2 text-xs font-medium text-gray-700">Page {idx + 1}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       )}
