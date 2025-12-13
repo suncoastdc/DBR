@@ -11,9 +11,8 @@ const buildSignature = (tx: Pick<BankTransaction, 'date' | 'description' | 'amou
   `${tx.date}|${normalizeDescription(tx.description)}|${tx.amount.toFixed(2)}`;
 
 const BankImport: React.FC<BankImportProps> = ({ onImport, existingTransactions }) => {
-  const [csvText, setCsvText] = useState<string>('');
   const [preview, setPreview] = useState<BankTransaction[]>([]);
-  
+
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -21,7 +20,6 @@ const BankImport: React.FC<BankImportProps> = ({ onImport, existingTransactions 
     const reader = new FileReader();
     reader.onload = (event) => {
       const text = event.target?.result as string;
-      setCsvText(text);
       parseCSV(text);
     };
     reader.readAsText(file);
@@ -29,6 +27,8 @@ const BankImport: React.FC<BankImportProps> = ({ onImport, existingTransactions 
 
   // Simple heuristics based CSV parser
   const parseCSV = (text: string) => {
+    setPreview([]);
+
     const lines = text.split(/\r?\n/).filter(line => line.trim() !== '');
     if (lines.length < 2) return;
 
@@ -154,7 +154,6 @@ const BankImport: React.FC<BankImportProps> = ({ onImport, existingTransactions 
   const handleConfirm = () => {
     onImport(preview);
     setPreview([]);
-    setCsvText('');
   };
 
   return (
