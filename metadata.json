@@ -1,0 +1,7 @@
+{
+  "name": "Dentrix Bank Reconciler",
+  "description": "A privacy-focused tool to reconcile Dentrix daily deposit slips against bank statements using AI extraction and local processing.",
+  "requestFramePermissions": [
+    "display-capture"
+  ]
+}

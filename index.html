@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#1e40af" />
+  <meta name="description" content="Dentrix Bank Reconciler - Secure local deposit verification tool" />
+  <title>Dentrix Bank Reconciler</title>
+  <link rel="manifest" href="/manifest.json" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {}
+      }
+    }
+  </script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet" />
+  <style>
+    /* Custom scrollbar for cleaner look */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: #f1f1f1;
+    }
+
+    .dark ::-webkit-scrollbar-track {
+      background: #374151;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #c1c1c1;
+      border-radius: 4px;
+    }
+
+    .dark ::-webkit-scrollbar-thumb {
+      background: #6b7280;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #a8a8a8;
+    }
+
+    .dark ::-webkit-scrollbar-thumb:hover {
+      background: #4b5563;
+    }
+  </style>
+
+
+  <script>
+    window.onerror = function (message, source, lineno, colno, error) {
+      const errDiv = document.createElement('div');
+      errDiv.style.position = 'fixed';
+      errDiv.style.top = '0';
+      errDiv.style.left = '0';
+      errDiv.style.width = '100%';
+      errDiv.style.backgroundColor = '#fee2e2';
+      errDiv.style.color = '#991b1b';
+      errDiv.style.padding = '1rem';
+      errDiv.style.zIndex = '9999';
+      errDiv.style.fontFamily = 'monospace';
+      errDiv.style.borderBottom = '1px solid #b91c1c';
+      errDiv.innerHTML = `<strong>Global Error:</strong> ${message}<br><small>${source}:${lineno}:${colno}</small><br><pre>${error ? error.stack : ''}</pre>`;
+      document.body.prepend(errDiv);
+    };
+
+    window.onunhandledrejection = function (event) {
+      const errDiv = document.createElement('div');
+      errDiv.style.position = 'fixed';
+      errDiv.style.top = '50px'; // Offset slightly
+      errDiv.style.left = '0';
+      errDiv.style.width = '100%';
+      errDiv.style.backgroundColor = '#fef3c7';
+      errDiv.style.color = '#92400e';
+      errDiv.style.padding = '1rem';
+      errDiv.style.zIndex = '9999';
+      errDiv.style.fontFamily = 'monospace';
+      errDiv.style.borderBottom = '1px solid #b45309';
+      errDiv.innerHTML = `<strong>Unhandled Promise:</strong> ${event.reason}`;
+      document.body.prepend(errDiv);
+    };
+  </script>
+</head>
+
+<body class="bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-gray-100 transition-colors duration-200">
+  <div id="root"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+
+</html>

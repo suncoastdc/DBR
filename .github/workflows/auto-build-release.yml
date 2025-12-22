@@ -1,0 +1,115 @@
+name: Auto build and release on approval or push
+
+on:
+  push:
+    branches: [main]
+  pull_request_review:
+    types: [submitted]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: auto-release-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: |
+      github.actor != 'github-actions[bot]' &&
+      (
+        github.event_name == 'push' ||
+        (
+          github.event_name == 'pull_request_review' &&
+          github.event.review.state == 'approved' &&
+          github.event.pull_request.head.repo.full_name == github.repository
+        )
+      )
+    runs-on: windows-latest
+    env:
+      GH_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+      AUTO_UPDATE_TOKEN: ${{ secrets.AUTO_UPDATE_TOKEN }}
+
+    steps:
+      - name: Ensure auto-update token is set
+        run: |
+          if (-not $env:AUTO_UPDATE_TOKEN -or $env:AUTO_UPDATE_TOKEN -eq "") {
+            Write-Host "AUTO_UPDATE_TOKEN secret is required for private repo updates."
+            exit 1
+          }
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Configure git user
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Skip if latest commit already bumped
+        id: skip
+        run: |
+          $lastMessage = git log -1 --pretty=%B
+          if ($lastMessage -match "chore:\s*bump version") {
+            "skip=true" >> $env:GITHUB_OUTPUT
+          } else {
+            "skip=false" >> $env:GITHUB_OUTPUT
+          }
+
+      - name: Bump patch version
+        if: steps.skip.outputs.skip == 'false'
+        run: |
+          npm version patch --no-git-tag-version
+          $version = node -p "require('./package.json').version"
+          "new_version=$version" >> $env:GITHUB_ENV
+
+      - name: Commit and push version bump
+        if: steps.skip.outputs.skip == 'false'
+        run: |
+          git add package.json package-lock.json
+          git commit -m "chore: bump version to $env:new_version"
+          git push origin HEAD:${{ github.event.pull_request.head.ref || github.ref_name }}
+
+      - name: Tag version
+        if: steps.skip.outputs.skip == 'false'
+        run: |
+          git tag "v$env:new_version"
+          git push origin "v$env:new_version"
+
+      - name: Write auto-update token
+        run: |
+          if ($env:AUTO_UPDATE_TOKEN -ne "") {
+            if (-not (Test-Path -Path "build")) { New-Item -ItemType Directory -Path "build" | Out-Null }
+            $json = "{`"token`":`"$env:AUTO_UPDATE_TOKEN`"}"
+            Set-Content -Path "build/update-token.json" -Value $json -Encoding UTF8
+          }
+
+      - name: Verify auto-update token file
+        run: |
+          if (-not (Test-Path -Path "build/update-token.json")) {
+            Write-Host "Missing build/update-token.json."
+            exit 1
+          }
+          $json = Get-Content -Path "build/update-token.json" -Raw | ConvertFrom-Json
+          if (-not $json.token -or $json.token -eq "") {
+            Write-Host "build/update-token.json is missing a token."
+            exit 1
+          }
+
+      - name: Build and publish installer
+        run: |
+          npm run prebuild
+          npx electron-builder --win --x64 --publish always

@@ -1,0 +1,8 @@
+- CI automation (auto-build-release.yml): new commits to main bump version (unless latest commit already is a bump), tag, and build/publish the Windows installer; PR approvals run the same workflow on the PR branch, then tag/publish from there. Tag pushes still trigger release.yml (builds/publishes off any v* tag).
+- Requirements: AUTO_UPDATE_TOKEN must be present (workflow fails fast without it). GH_TOKEN/GITHUB_TOKEN covers CI-side publish; packaged app uses AUTO_UPDATE_TOKEN.
+- Quick check: in Actions, confirm the latest main push and the v1.0.24 tag runs both completed and published an .exe asset. If they are green, new pushes/approvals keep producing fresh installers automatically.
+- Local dev/test: `npm run electron:dev` for hot-reloaded Electron shell with Vite; `npm run dev` for browser-only checks.
+- Pre-release verification: `npm run build` then `npm run preview` to smoke-test the production bundle without packaging.
+- Local Windows packaging note: if `electron-builder` fails with "Cannot create symbolic link", enable Windows Developer Mode or run the shell as Administrator, then retry `npm run build`.
+- Packaging cadence: `npm run dist` for release installers. To avoid downloading a new .exe each change, add auto-updates via electron-builder publish + autoUpdater (GitHub Releases/S3, etc.) so the installer updates itself with deltas.
+- If skipping auto-updates for now, share zipped `dist/` for web testing and only produce the installer for milestones.

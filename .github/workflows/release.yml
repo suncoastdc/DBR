@@ -1,0 +1,105 @@
+name: Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build (CI gate)
+        run: npm run prebuild
+
+      - name: Upload dist artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist
+          if-no-files-found: error
+
+  build:
+    needs: test
+    runs-on: windows-latest
+    env:
+      GH_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+      AUTO_UPDATE_TOKEN: ${{ secrets.AUTO_UPDATE_TOKEN }}
+
+    steps:
+      - name: Ensure auto-update token is set
+        run: |
+          if (-not $env:AUTO_UPDATE_TOKEN -or $env:AUTO_UPDATE_TOKEN -eq "") {
+            Write-Host "AUTO_UPDATE_TOKEN secret is required for private repo updates."
+            exit 1
+          }
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Cache Electron downloads
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.LOCALAPPDATA }}\electron\Cache
+            ${{ env.LOCALAPPDATA }}\electron-builder\Cache
+            ${{ env.LOCALAPPDATA }}\Programs\electron
+          key: ${{ runner.os }}-electron-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-electron-
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Write auto-update token
+        if: env.AUTO_UPDATE_TOKEN != ''
+        run: |
+          echo "::add-mask::$env:AUTO_UPDATE_TOKEN"
+          if (-not (Test-Path -Path "build")) { New-Item -ItemType Directory -Path "build" | Out-Null }
+          $json = "{`"token`":`"$env:AUTO_UPDATE_TOKEN`"}"
+          Set-Content -Path "build/update-token.json" -Value $json -Encoding UTF8
+      - name: Verify auto-update token file
+        run: |
+          if (-not (Test-Path -Path "build/update-token.json")) {
+            Write-Host "Missing build/update-token.json."
+            exit 1
+          }
+          $json = Get-Content -Path "build/update-token.json" -Raw | ConvertFrom-Json
+          if (-not $json.token -or $json.token -eq "") {
+            Write-Host "build/update-token.json is missing a token."
+            exit 1
+          }
+
+      - name: Download dist artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+      - name: Build and publish
+        run: |
+          npx electron-builder --win --x64 --publish always

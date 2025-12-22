@@ -1,0 +1,70 @@
+{
+  "name": "dbr-dentrix-bank-reconciler",
+  "version": "1.0.42",
+  "main": "electron/main.js",
+  "author": "MyElectronApp Developer",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "build": "npm run prebuild && electron-builder",
+    "build:win": "npm run prebuild && electron-builder --win --x64",
+    "dev": "vite --port 5173",
+    "preview": "vite preview",
+    "prebuild": "vite build",
+    "prebuild:win": "npm run prebuild",
+    "electron:dev": "concurrently -k \"npm run dev\" \"wait-on http://localhost:5173 && node scripts/run-electron.js\""
+  },
+  "dependencies": {
+    "@google/genai": "^1.31.0",
+    "electron-updater": "^6.1.8",
+    "pdfjs-dist": "^4.6.82",
+    "react": "^19.2.1",
+    "react-dom": "^19.2.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.0.0",
+    "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3",
+    "dotenv": "^17.2.3",
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.0",
+    "wait-on": "^7.2.0"
+  },
+  "build": {
+    "appId": "com.dbr.dentrix.bankreconciler",
+    "productName": "DBR Dentrix Bank Reconciler",
+    "directories": {
+      "output": "release"
+    },
+    "icon": "build/icon.ico",
+    "files": [
+      "dist/**/*",
+      "electron/main.js",
+      "electron/preload.js",
+      "package.json",
+      "build/icon.ico"
+    ],
+    "extraResources": [
+      {
+        "from": "build/update-token.json",
+        "to": "update-token.json"
+      }
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "suncoastdc",
+        "repo": "DBR",
+        "releaseType": "release"
+      }
+    ]
+  }
+}
