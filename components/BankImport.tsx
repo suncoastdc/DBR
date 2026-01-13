@@ -1,18 +1,19 @@
 import React, { useEffect, useState } from 'react';
+import * as pdfjsLib from 'pdfjs-dist';
+import workerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { BankTransaction } from '../types';
+import { parseBankStatementPage } from '../services/geminiService';
+import { buildImportLogKey, getSourceMachineName, hashBuffer, loadImportLog, saveImportLog } from '../services/importLogService';
 import {
+  createPatternFromDescription,
   inferPaymentType,
   loadPaymentRules,
   PaymentRule,
   PaymentTypeKey,
   RuleSuggestion,
-  createPatternFromDescription,
   suggestRulesFromTransactions,
   upsertPaymentRule,
 } from '../services/paymentRulesService';
-import { parseBankStatementPage } from '../services/geminiService';
-import * as pdfjsLib from 'pdfjs-dist';
-import workerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
 
@@ -32,18 +33,22 @@ const BankImport: React.FC<BankImportProps> = ({ onImport, existingTransactions 
   const [ruleSuggestions, setRuleSuggestions] = useState<RuleSuggestion[]>([]);
   const [suggestionSelections, setSuggestionSelections] = useState<Record<string, PaymentTypeKey | ''>>({});
   const [processingStatus, setProcessingStatus] = useState<{ current: number; total: number } | null>(null);
+  const [pendingImportMeta, setPendingImportMeta] = useState<{
+    fileName: string;
+    fileType: 'bank_csv' | 'bank_pdf';
+    fileHash?: string;
+  } | null>(null);
 
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const text = event.target?.result as string;
-      parseCSV(text);
-    };
-    reader.readAsText(file);
+    const arrayBuffer = await file.arrayBuffer();
+    const fileHash = await hashBuffer(arrayBuffer);
+    const text = await file.text();
+    setPendingImportMeta({ fileName: file.name, fileType: 'bank_csv', fileHash });
+    parseCSV(text);
   };
 
   // Simple heuristics based CSV parser
@@ -265,9 +270,26 @@ const BankImport: React.FC<BankImportProps> = ({ onImport, existingTransactions 
     return today;
   };
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     onImport(preview);
+    if (pendingImportMeta) {
+      const importedAt = new Date().toISOString();
+      const sourceMachine = await getSourceMachineName();
+      const key = buildImportLogKey(pendingImportMeta.fileType, pendingImportMeta.fileName, pendingImportMeta.fileHash);
+      const log = loadImportLog();
+      log[key] = {
+        date: preview[0]?.date || importedAt.split('T')[0],
+        importedAt,
+        fileName: pendingImportMeta.fileName,
+        sourceMachine,
+        fileType: pendingImportMeta.fileType,
+        recordCount: preview.length,
+        fileHash: pendingImportMeta.fileHash,
+      };
+      saveImportLog(log);
+    }
     setPreview([]);
+    setPendingImportMeta(null);
   };
 
 
@@ -280,6 +302,7 @@ const BankImport: React.FC<BankImportProps> = ({ onImport, existingTransactions 
 
     try {
       const arrayBuffer = await file.arrayBuffer();
+      const fileHash = await hashBuffer(arrayBuffer);
       const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
       const pdf = await loadingTask.promise;
 
@@ -317,6 +340,7 @@ const BankImport: React.FC<BankImportProps> = ({ onImport, existingTransactions 
         allTransactions.push(...mapped);
       }
 
+      setPendingImportMeta({ fileName: file.name, fileType: 'bank_pdf', fileHash });
       processRawTransactions(allTransactions);
 
     } catch (err: any) {
@@ -363,7 +387,15 @@ const BankImport: React.FC<BankImportProps> = ({ onImport, existingTransactions 
           <div className="flex justify-between items-center mb-2">
             <h3 className="font-bold text-lg dark:text-white">{preview.length} Transactions Found</h3>
             <div className="space-x-2">
-              <button onClick={() => setPreview([])} className="px-4 py-2 text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-white">Cancel</button>
+              <button
+                onClick={() => {
+                  setPreview([]);
+                  setPendingImportMeta(null);
+                }}
+                className="px-4 py-2 text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-white"
+              >
+                Cancel
+              </button>
               <button onClick={handleConfirm} className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 font-medium">Import Transactions</button>
             </div>
           </div>

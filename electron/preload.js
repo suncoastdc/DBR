@@ -1,4 +1,5 @@
 const { contextBridge, ipcRenderer } = require('electron');
+const os = require('node:os');
 let fs;
 let path;
 try {
@@ -57,6 +58,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     }
     return results;
   },
+  getDeviceName: () => os.hostname(),
   // Updater APIs
   updater: {
     checkForUpdates: () => safeInvoke('check-for-updates'),

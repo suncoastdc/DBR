@@ -9,8 +9,10 @@ interface PdfEntry {
 interface Window {
     electronAPI?: {
         captureScreen: () => Promise<string>;
+        getDeviceName: () => Promise<string>;
         listPdfs: (path: string) => Promise<PdfEntry[]>;
         readPdfBase64: (path: string) => Promise<string>;
+        selectFiles: () => Promise<PdfEntry[]>;
         selectFolder: () => Promise<string | null>;
         updater: {
             checkForUpdates: () => Promise<any>;

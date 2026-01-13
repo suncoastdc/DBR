@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { DepositRecord, DepositBreakdown } from '../types';
-import Redactor from './Redactor';
-import { parseDepositSlip } from '../services/geminiService';
-import { getApiKey } from '../services/settingsService';
 import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
 import workerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
-import { ImportLog, loadImportLog, saveImportLog } from '../services/importLogService';
+import { DepositBreakdown, DepositRecord } from '../types';
+import Redactor from './Redactor';
+import { parseDepositSlip } from '../services/geminiService';
+import { ImportLog, getSourceMachineName, hashBuffer, loadImportLog, saveImportLog } from '../services/importLogService';
+import { getApiKey } from '../services/settingsService';
 
 GlobalWorkerOptions.workerSrc = workerSrc;
 
@@ -235,7 +235,7 @@ const BulkPdfImport: React.FC<BulkPdfImportProps> = ({ onSave, onImportedDate })
         sourceImage: compressed,
       };
       onSave(record);
-      markImported(selectedPdf, assignedDate);
+      await markImported(selectedPdf, assignedDate);
       setSelectedPdf(null);
       setPageImages([]);
       setSelectedPageIndex(0);
@@ -336,10 +336,23 @@ const BulkPdfImport: React.FC<BulkPdfImportProps> = ({ onSave, onImportedDate })
     }
   };
 
-  const markImported = (entry: PdfEntry, assignedDate?: string) => {
+  const markImported = async (entry: PdfEntry, assignedDate?: string) => {
+    const importedAt = new Date().toISOString();
+    const [sourceMachine, fileHash] = await Promise.all([
+      getSourceMachineName(),
+      hashPdfEntry(entry.path),
+    ]);
     const nextLog = {
       ...importLog,
-      [entry.path]: { date: assignedDate || entry.fileDate || '', importedAt: new Date().toISOString() },
+      [entry.path]: {
+        date: assignedDate || entry.fileDate || '',
+        importedAt,
+        fileName: entry.name,
+        sourceMachine,
+        fileType: 'day_sheet_pdf',
+        recordCount: 1,
+        fileHash,
+      },
     };
     setImportLog(nextLog);
     saveImportLog(nextLog);
@@ -830,19 +843,8 @@ function toIsoDate(d: Date): string {
 }
 
 async function extractPdfDate(filePath: string): Promise<string | null> {
-  let bytes: Uint8Array;
-
-  if (window.electronAPI) {
-    const base64 = await window.electronAPI.readPdfBase64(filePath);
-    if (!base64) return null;
-    bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
-  } else {
-    // Browser fallback
-    const file = window.browserFiles?.[filePath];
-    if (!file) return null;
-    const arrayBuffer = await file.arrayBuffer();
-    bytes = new Uint8Array(arrayBuffer);
-  }
+  const bytes = await loadPdfBytes(filePath);
+  if (!bytes) return null;
 
   const pdf = await getDocument({ data: bytes }).promise;
   const page = await pdf.getPage(1);
@@ -856,19 +858,8 @@ async function extractPdfDate(filePath: string): Promise<string | null> {
 }
 
 async function renderPdfPages(filePath: string, maxWidth = 1000): Promise<string[]> {
-  let bytes: Uint8Array;
-
-  if (window.electronAPI) {
-    const base64 = await window.electronAPI.readPdfBase64(filePath);
-    if (!base64) return [];
-    bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
-  } else {
-    // Browser fallback
-    const file = window.browserFiles?.[filePath];
-    if (!file) return [];
-    const arrayBuffer = await file.arrayBuffer();
-    bytes = new Uint8Array(arrayBuffer);
-  }
+  const bytes = await loadPdfBytes(filePath);
+  if (!bytes) return [];
 
   const pdf = await getDocument({ data: bytes }).promise;
   const pages: string[] = [];
@@ -885,6 +876,26 @@ async function renderPdfPages(filePath: string, maxWidth = 1000): Promise<string
     pages.push(canvas.toDataURL('image/png'));
   }
   return pages;
+}
+
+async function loadPdfBytes(filePath: string): Promise<Uint8Array | null> {
+  if (window.electronAPI) {
+    const base64 = await window.electronAPI.readPdfBase64(filePath);
+    if (!base64) return null;
+    return Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+  }
+
+  const file = window.browserFiles?.[filePath];
+  if (!file) return null;
+  const arrayBuffer = await file.arrayBuffer();
+  return new Uint8Array(arrayBuffer);
+}
+
+async function hashPdfEntry(filePath: string): Promise<string> {
+  const bytes = await loadPdfBytes(filePath);
+  if (!bytes) return '';
+  const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+  return hashBuffer(buffer);
 }
 
 // Downscale/compress data URLs to keep localStorage usage low.
